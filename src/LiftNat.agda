@@ -105,8 +105,9 @@ T[_]⟦_⟧ {_} {Staged} Γ (Rep τ) = Tm Base (forgetTy τ) (forgetCtx Γ)
 ⟦ liftN e ⟧ = C ⟦ e ⟧
 ⟦ e₁ ++ e₂ ⟧ = ⟦ e₁ ⟧ + ⟦ e₂ ⟧
 
--- Having difficulty even stating this in Agda...
-correct : ∀ {n τ} {Γ : Ctx Staged n} (e : Tm Staged (Rep τ) []) → ⟦ ⟦ e ⟧ ⟧ ≡ ⟦ forgetTm e ⟧
+-- This complains that it can't determine if we need a case for `Var`. We definitely
+-- do (that case should just read from the store that's missing from the above).
+correct : ∀ {n τ} {Γ : Ctx Staged n} (e : Tm Staged (Rep τ) Γ) → ⟦ ⟦ e ⟧ ⟧ ≡ ⟦ forgetTm e ⟧
 correct (e₁ $ e₂) = {!!}
 correct (liftN e) = {!!}
 correct (e₁ ++ e₂) = {!!}
