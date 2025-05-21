@@ -1,0 +1,3 @@
+name: agda-lms
+depend: standard-library
+include: src/
