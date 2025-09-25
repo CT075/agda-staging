@@ -16,40 +16,55 @@ dW Staged = ⊤
 data Typ : W → Set where
   N : ∀{w} → Typ w
   -- `dW Base` is empty, so we can't build `Rep τ : Typ Base`
-  Rep : ∀{w} → {dW w} → Typ Base → Typ w
+  Rep : Typ Base → Typ Staged
+
+weakenTyp : Typ Base → Typ Staged
+weakenTyp N = N
 
 data Exp : (w : W) → Typ w → Set where
   C : ∀{w} → ℕ → Exp w N
   _+'_ : ∀{w} → Exp w N → Exp w N → Exp w N
   _*'_ : ∀{w} → Exp w N → Exp w N → Exp w N
 
-  lift : Exp Base N → Exp Staged (Rep N)
+  lift : Exp Staged N → Exp Staged (Rep N)
   _++_ : Exp Staged (Rep N) → Exp Staged (Rep N) → Exp Staged (Rep N)
   _**_ : Exp Staged (Rep N) → Exp Staged (Rep N) → Exp Staged (Rep N)
-
-eval : Exp Base N → ℕ
-eval (C x) = x
-eval (e₁ +' e₂) = eval e₁ + eval e₂
-eval (e₁ *' e₂) = eval e₁ * eval e₂
 
 ⟦_⟧ : ∀{w} → Typ w → Set
 ⟦ N ⟧ = ℕ
 ⟦ Rep τ ⟧ = Exp Base τ
 
+eval : ∀{τ} → Exp Base τ → ⟦ τ ⟧
+eval (C x) = x
+eval (e₁ +' e₂) = eval e₁ + eval e₂
+eval (e₁ *' e₂) = eval e₁ * eval e₂
+
+unrep : Typ Staged → Typ Base
+unrep N = N
+unrep (Rep τ) = τ
+
 evalms : ∀{τ} → Exp Staged τ → ⟦ τ ⟧
 evalms (C x) = x
 evalms (e₁ +' e₂) = evalms e₁ + evalms e₂
 evalms (e₁ *' e₂) = evalms e₁ * evalms e₂
-evalms (lift e) = C (eval e)
+evalms (lift e) = C (evalms e)
 evalms (e₁ ++ e₂) = evalms e₁ +' evalms e₂
 evalms (e₁ ** e₂) = evalms e₁ *' evalms e₂
 
-forget : Exp Staged (Rep N) → Exp Base N
-forget (lift e) = e
+forget : ∀{τ} → Exp Staged τ → Exp Base (unrep τ)
+forget (C x) = C x
+forget (e₁ +' e₂) = forget e₁ +' forget e₂
+forget (e₁ *' e₂) = forget e₁ *' forget e₂
+forget (lift e) = forget e
 forget (e₁ ++ e₂) = forget e₁ +' forget e₂
 forget (e₁ ** e₂) = forget e₁ *' forget e₂
 
-correct : (e : Exp Staged (Rep N)) → eval (evalms e) ≡ eval (forget e)
-correct (lift e) = refl
+lemma : (e : Exp Staged N) → evalms e ≡ eval (forget e)
+lemma (C x) = refl
+lemma (e₁ +' e₂) rewrite lemma e₁ rewrite lemma e₂ = refl
+lemma (e₁ *' e₂) rewrite lemma e₁ rewrite lemma e₂ = refl
+
+correct : ∀{τ} → (e : Exp Staged (Rep τ)) → eval (evalms e) ≡ eval (forget e)
+correct (lift e) rewrite lemma e = refl
 correct (e₁ ++ e₂) rewrite correct e₁ rewrite correct e₂ = refl
 correct (e₁ ** e₂) rewrite correct e₁ rewrite correct e₂ = refl
