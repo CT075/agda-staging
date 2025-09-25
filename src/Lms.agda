@@ -86,15 +86,22 @@ rlookupEnv env i = lookupEnv (revEnv env) i
 unwrapN : ∀{w} → Val w N → (ℕ → T) → T
 unwrapN (Const n) k = k n
 
-liftUnwrap2 : ∀{w} → (ℕ → ℕ → ℕ) → Val w N → Val w N → Val w N
-liftUnwrap2 f cx₁ cx₂ = unwrapN cx₁ (λ x₁ → unwrapN cx₂ (λ x₂ → Const (f x₁ x₂)))
+liftValN2 : ∀{w} → (ℕ → ℕ → ℕ) → Val w N → Val w N → Val w N
+liftValN2 f cx₁ cx₂ = unwrapN cx₁ (λ x₁ → unwrapN cx₂ (λ x₂ → Const (f x₁ x₂)))
+
+unwrap=> : ∀{w τ₁ τ₂} → Val w (τ₁ => τ₂) →
+  (∀{n} {Γ : Ctx w n} → Env Γ → Tm w τ₂ (τ₁ ∷ Γ) → T) → T
+unwrap=> (Closure env e) k = k env e
 
 eval : ∀{n τ} {Γ : Ctx Base n} → (env : Env Γ) → Tm Base τ Γ → Val Base τ
 eval env (C x) = Const x
 eval env (V i) = rlookupEnv env i
 eval env (λ' τ e) = Closure env e
-eval env (e₁ $ e₂) = {! !}
+eval env (e₁ $ e₂) =
+  unwrap=>
+    (eval env e₁)
+    (λ env' e → eval (cons (eval env e₂) env') e)
 eval {Γ = Γ} env (Let e₁ e₂) = eval (cons x env) e₂
   where x = eval env e₁
-eval env (e₁ +' e₂) = liftUnwrap2 (Nat._+_) (eval env e₁) (eval env e₂)
-eval env (e₁ *' e₂) = liftUnwrap2 (Nat._*_) (eval env e₁) (eval env e₂)
+eval env (e₁ +' e₂) = liftValN2 (Nat._+_) (eval env e₁) (eval env e₂)
+eval env (e₁ *' e₂) = liftValN2 (Nat._*_) (eval env e₁) (eval env e₂)
