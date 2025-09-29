@@ -9,24 +9,19 @@ data W : Set where
   Base : W
   Staged : W
 
-dW : W → Set
-dW Base = ⊥
-dW Staged = ⊤
-
 data Typ : W → Set where
   N : ∀{w} → Typ w
-  -- `dW Base` is empty, so we can't build `Rep τ : Typ Base`
   Rep : Typ Base → Typ Staged
 
-weakenTyp : Typ Base → Typ Staged
-weakenTyp N = N
+data weakensTo : Typ Base → Typ Staged → Set where
+  weaken-N : weakensTo N N
 
 data Exp : (w : W) → Typ w → Set where
   C : ∀{w} → ℕ → Exp w N
   _+'_ : ∀{w} → Exp w N → Exp w N → Exp w N
   _*'_ : ∀{w} → Exp w N → Exp w N → Exp w N
 
-  lift : Exp Staged N → Exp Staged (Rep N)
+  lift : ∀{τbase τ} → {wk : weakensTo τbase τ} → Exp Staged τ → Exp Staged (Rep τbase)
   _++_ : Exp Staged (Rep N) → Exp Staged (Rep N) → Exp Staged (Rep N)
   _**_ : Exp Staged (Rep N) → Exp Staged (Rep N) → Exp Staged (Rep N)
 
@@ -47,7 +42,7 @@ evalms : ∀{τ} → Exp Staged τ → ⟦ τ ⟧
 evalms (C x) = x
 evalms (e₁ +' e₂) = evalms e₁ + evalms e₂
 evalms (e₁ *' e₂) = evalms e₁ * evalms e₂
-evalms (lift e) = C (evalms e)
+evalms (lift {wk = weaken-N} e) = C (evalms e)
 evalms (e₁ ++ e₂) = evalms e₁ +' evalms e₂
 evalms (e₁ ** e₂) = evalms e₁ *' evalms e₂
 
@@ -55,7 +50,7 @@ forget : ∀{τ} → Exp Staged τ → Exp Base (unrep τ)
 forget (C x) = C x
 forget (e₁ +' e₂) = forget e₁ +' forget e₂
 forget (e₁ *' e₂) = forget e₁ *' forget e₂
-forget (lift e) = forget e
+forget (lift {wk = weaken-N} e) = forget e
 forget (e₁ ++ e₂) = forget e₁ +' forget e₂
 forget (e₁ ** e₂) = forget e₁ *' forget e₂
 
@@ -65,6 +60,6 @@ lemma (e₁ +' e₂) rewrite lemma e₁ rewrite lemma e₂ = refl
 lemma (e₁ *' e₂) rewrite lemma e₁ rewrite lemma e₂ = refl
 
 correct : ∀{τ} → (e : Exp Staged (Rep τ)) → eval (evalms e) ≡ eval (forget e)
-correct (lift e) rewrite lemma e = refl
+correct (lift {wk = weaken-N} e) rewrite lemma e = refl
 correct (e₁ ++ e₂) rewrite correct e₁ rewrite correct e₂ = refl
 correct (e₁ ** e₂) rewrite correct e₁ rewrite correct e₂ = refl
