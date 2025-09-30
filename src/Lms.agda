@@ -5,7 +5,8 @@ open import Data.Empty using (⊥)
 open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
 open import Data.Fin as Fin using (Fin)
-open import Data.Nat as Nat using (ℕ; suc; zero)
+open import Data.Nat as Nat using (ℕ; suc; zero; _+_; _*_)
+open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
 open import Data.Vec.Extensions
 
@@ -40,7 +41,7 @@ Ctx w = Vec (Typ w)
 data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   -- STLC
   C : ∀{w n Γ} → ℕ → Tm w {n} N Γ
-  V : ∀{w n Γ} → (i : Fin n) → Tm w (rlookup Γ i) Γ
+  V : ∀{w n Γ τ} → (i : Fin n) → {rlookup Γ i ≡ τ} → Tm w τ Γ
   λ' : ∀{w n τ₂} {Γ : Ctx w n} → (τ₁ : Typ w) → Tm w τ₂ (τ₁ ∷ Γ) → Tm w (τ₁ => τ₂) Γ
   _$_ : ∀{w n τ₁ τ₂} {Γ : Ctx w n} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w τ₂ Γ
 
@@ -104,6 +105,9 @@ module OrTimeoutOps where
     b ← mb
     Done (f a b)
 
+  bind : {A B : Set} → (A → OrTimeout B) → OrTimeout A → OrTimeout B
+  bind f x = x >>= f
+
 unwrapN : ∀{w} → Val w N → (ℕ → T) → T
 unwrapN (Const n) k = k n
 
@@ -119,7 +123,7 @@ eval : ∀{n τ} {Γ : Ctx Base n} → (gas : ℕ) → (env : Env Γ) → Tm Bas
   OrTimeout (Val Base τ)
 eval zero env _ = Timeout
 eval (suc i) env (C x) = Done (Const x)
-eval (suc i) env (V n) = Done (rlookupEnv env n)
+eval (suc _) env (V i {p}) rewrite sym p = Done (rlookupEnv env i)
 eval (suc i) env (λ' τ e) = Done (Closure env e)
 eval (suc i) env (e₁ $ e₂) = do
   f ← eval i env e₁
@@ -131,9 +135,34 @@ eval (suc i) env (Let e₁ e₂) = do
   eval i (cons x env) e₂
   where open OrTimeoutOps
 eval (suc i) env (e₁ +' e₂) =
-  OrTimeoutOps.liftA2 (liftValN2 (Nat._+_)) (eval i env e₁) (eval i env e₂)
+  OrTimeoutOps.liftA2 (liftValN2 (_+_)) (eval i env e₁) (eval i env e₂)
 eval (suc i) env (e₁ *' e₂) =
-  OrTimeoutOps.liftA2 (liftValN2 (Nat._*_)) (eval i env e₁) (eval i env e₂)
+  OrTimeoutOps.liftA2 (liftValN2 (_*_)) (eval i env e₁) (eval i env e₂)
+
+data _⊢_⇓_ : ∀{n τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
+  eval-c : ∀{n} {Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
+  eval-vl : ∀{n} {Γ : Ctx Base n} {env : Env Γ} i vl →
+    {rlookupEnv env i ≡ vl} →
+    env ⊢ V i {refl} ⇓ vl
+  eval-λ : ∀{n} {Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} (env : Env Γ) →
+    env ⊢ λ' τ e ⇓ Closure env e
+  eval-$ : ∀{n n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
+    {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v}
+    {env : Env Γ} →
+    env ⊢ e₁ ⇓ (Closure env' e') → env ⊢ e₂ ⇓ x →
+    cons x env' ⊢ e' ⇓ v →
+    env ⊢ (e₁ $ e₂) ⇓ v
+  eval-let : ∀{n τ₁ τ₂} {Γ : Ctx Base n}
+    {e₁ : Tm Base τ₁ Γ} {e₂ : Tm Base τ₂ (τ₁ ∷ Γ)}
+    {x v} {env : Env Γ} →
+    env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
+    env ⊢ Let e₁ e₂ ⇓ v
+  eval-+ : ∀{n} {Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ x} →
+    env ⊢ e₁ +' e₂ ⇓ Const x
+  eval-* : ∀{n} {Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ * x₂ ≡ x} →
+    env ⊢ e₁ *' e₂ ⇓ Const x
 
 -- TODO: What is the relationship between env1/env2 and env?
 -- with namesets, this is easy
