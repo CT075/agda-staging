@@ -1,4 +1,4 @@
-module Lms where
+module Lms.STLC where
 
 open import Data.Unit using (⊤)
 open import Data.Empty using (⊥)
@@ -14,6 +14,7 @@ open import Data.Vec.Extensions
 
 variable
   T : Set
+  n : ℕ
 
 -- Source
 
@@ -23,9 +24,11 @@ data W : Set where
   Base : W
   Staged : W
 
+variable w : W
+
 data Typ : W → Set where
-  N : ∀{w} → Typ w
-  _=>_ : ∀{w} → Typ w → Typ w → Typ w
+  N : Typ w
+  _=>_ : Typ w → Typ w → Typ w
   Rep : Typ Base → Typ Staged
 
 data weakensTo : Typ Base → Typ Staged → Set where
@@ -40,54 +43,54 @@ Ctx w = Vec (Typ w)
 -- formers.
 data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   -- STLC
-  C : ∀{w n Γ} → ℕ → Tm w {n} N Γ
-  V : ∀{w n Γ τ} → (i : Fin n) → {rlookup Γ i ≡ τ} → Tm w τ Γ
-  λ' : ∀{w n τ₂} {Γ : Ctx w n} → (τ₁ : Typ w) → Tm w τ₂ (τ₁ ∷ Γ) → Tm w (τ₁ => τ₂) Γ
-  _$_ : ∀{w n τ₁ τ₂} {Γ : Ctx w n} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w τ₂ Γ
+  C : ∀{Γ} → ℕ → Tm w {n} N Γ
+  V : ∀{Γ τ} → (i : Fin n) → {rlookup Γ i ≡ τ} → Tm w τ Γ
+  λ' : ∀{τ₂} {Γ : Ctx w n} → (τ₁ : Typ w) → Tm w τ₂ (τ₁ ∷ Γ) → Tm w (τ₁ => τ₂) Γ
+  _$_ : ∀{τ₁ τ₂} {Γ : Ctx w n} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w τ₂ Γ
 
   -- Cut
-  Let : ∀{w n τ₁ τ₂} {Γ : Ctx w n} → Tm w τ₁ Γ → Tm w τ₂ (τ₁ ∷ Γ) → Tm w τ₂ Γ
+  Let : ∀{τ₁ τ₂} {Γ : Ctx w n} → Tm w τ₁ Γ → Tm w τ₂ (τ₁ ∷ Γ) → Tm w τ₂ Γ
 
   -- Nat
-  _+'_ : ∀{w n} {Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
-  _*'_ : ∀{w n} {Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
+  _+'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
+  _*'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
 
-  lift : ∀{n} {Γ : Ctx Staged n} {τbase τ} → {wk : weakensTo τbase τ} →
+  lift : ∀{Γ : Ctx Staged n} {τbase τ} → {wk : weakensTo τbase τ} →
     Tm Staged τ Γ → Tm Staged (Rep τbase) Γ
-  _++_ : ∀{n} {Γ : Ctx Staged n} →
+  _++_ : ∀{Γ : Ctx Staged n} →
     Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
-  _**_ : ∀{n} {Γ : Ctx Staged n} →
+  _**_ : ∀{Γ : Ctx Staged n} →
     Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
 
 -- TODO: factor out all the Env lemmas
 
-data Env : ∀ {w n} → Ctx w n → Set
+data Env : Ctx w n → Set
 data Val : (w : W) → Typ w → Set
 
 data Env where
-  nil : ∀{w} → Env {w} []
-  cons : ∀{w n τ} {Γ : Ctx w n} → Val w τ → Env Γ → Env (τ ∷ Γ)
+  nil : Env {w} []
+  cons : ∀{τ} {Γ : Ctx w n} → Val w τ → Env Γ → Env (τ ∷ Γ)
 
 data Val where
-  Const : ∀{w} → ℕ → Val w N
-  Closure : ∀{w n τ₁ τ₂} {Γ : Ctx w n} →
+  Const : ℕ → Val w N
+  Closure : ∀{τ₁ τ₂} {Γ : Ctx w n} →
     (env : Env Γ) → Tm w τ₂ (τ₁ ∷ Γ) →
     Val w (τ₁ => τ₂)
 
-revEnv : ∀{w n} {Γ : Ctx w n} → Env Γ → Env (Vec.reverse Γ)
+revEnv : ∀{Γ : Ctx w n} → Env Γ → Env (Vec.reverse Γ)
 revEnv nil = nil
 revEnv (cons {τ = τ} {Γ = Γ} x xs) rewrite reverse-∷ τ Γ = snoc (revEnv xs) x
     where
     _∷ʳ_ = Vec._∷ʳ_
-    snoc : ∀{w n} {Γ : Ctx w n} {τ} → Env Γ → Val w τ → Env (Γ ∷ʳ τ)
+    snoc : ∀{Γ : Ctx w n} {τ} → Env Γ → Val w τ → Env (Γ ∷ʳ τ)
     snoc nil x = cons x nil
     snoc (cons x' xs) x = cons x' (snoc xs x)
 
-lookupEnv : ∀{w n} {Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (lookup Γ i)
+lookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (lookup Γ i)
 lookupEnv (cons x xs) Fin.zero = x
 lookupEnv (cons x xs) (Fin.suc i) = lookupEnv xs i
 
-rlookupEnv : ∀{w n} {Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (rlookup Γ i)
+rlookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (rlookup Γ i)
 rlookupEnv env i = lookupEnv (revEnv env) i
 
 data OrTimeout (T : Set) : Set where
@@ -108,18 +111,18 @@ module OrTimeoutOps where
   bind : {A B : Set} → (A → OrTimeout B) → OrTimeout A → OrTimeout B
   bind f x = x >>= f
 
-unwrapN : ∀{w} → Val w N → (ℕ → T) → T
+unwrapN : Val w N → (ℕ → T) → T
 unwrapN (Const n) k = k n
 
-liftValN2 : ∀{w} → (ℕ → ℕ → ℕ) → Val w N → Val w N → Val w N
+liftValN2 : (ℕ → ℕ → ℕ) → Val w N → Val w N → Val w N
 liftValN2 f cx₁ cx₂ = unwrapN cx₁ (λ x₁ → unwrapN cx₂ (λ x₂ → Const (f x₁ x₂)))
 
-unwrap=> : ∀{w τ₁ τ₂} →
+unwrap=> : ∀{τ₁ τ₂} →
   Val w (τ₁ => τ₂) →
   (∀{n} {Γ : Ctx w n} → Env Γ → Tm w τ₂ (τ₁ ∷ Γ) → T) → T
 unwrap=> (Closure env e) k = k env e
 
-eval : ∀{n τ} {Γ : Ctx Base n} → (gas : ℕ) → (env : Env Γ) → Tm Base τ Γ →
+eval : ∀{τ} {Γ : Ctx Base n} → (gas : ℕ) → (env : Env Γ) → Tm Base τ Γ →
   OrTimeout (Val Base τ)
 eval zero env _ = Timeout
 eval (suc i) env (C x) = Done (Const x)
@@ -139,28 +142,33 @@ eval (suc i) env (e₁ +' e₂) =
 eval (suc i) env (e₁ *' e₂) =
   OrTimeoutOps.liftA2 (liftValN2 (_*_)) (eval i env e₁) (eval i env e₂)
 
-data _⊢_⇓_ : ∀{n τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
-  eval-c : ∀{n} {Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
-  eval-vl : ∀{n} {Γ : Ctx Base n} {env : Env Γ} i vl →
+eval-weaken-gas : ∀{τ} {Γ : Ctx Base n} {env : Env Γ} {v}
+  gas (e : Tm Base τ Γ) →
+  eval gas env e ≡ Done v → eval (suc gas) env e ≡ Done v
+eval-weaken-gas gas (C x) p rewrite p = refl
+
+data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
+  eval-c : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
+  eval-vl : ∀{Γ : Ctx Base n} {env : Env Γ} i vl →
     {rlookupEnv env i ≡ vl} →
     env ⊢ V i {refl} ⇓ vl
-  eval-λ : ∀{n} {Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} (env : Env Γ) →
+  eval-λ : ∀{Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} (env : Env Γ) →
     env ⊢ λ' τ e ⇓ Closure env e
-  eval-$ : ∀{n n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
+  eval-$ : ∀{n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
     {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v}
     {env : Env Γ} →
     env ⊢ e₁ ⇓ (Closure env' e') → env ⊢ e₂ ⇓ x →
     cons x env' ⊢ e' ⇓ v →
     env ⊢ (e₁ $ e₂) ⇓ v
-  eval-let : ∀{n τ₁ τ₂} {Γ : Ctx Base n}
+  eval-let : ∀{τ₁ τ₂} {Γ : Ctx Base n}
     {e₁ : Tm Base τ₁ Γ} {e₂ : Tm Base τ₂ (τ₁ ∷ Γ)}
     {x v} {env : Env Γ} →
     env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
     env ⊢ Let e₁ e₂ ⇓ v
-  eval-+ : ∀{n} {Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
+  eval-+ : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
     env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ x} →
     env ⊢ e₁ +' e₂ ⇓ Const x
-  eval-* : ∀{n} {Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
+  eval-* : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
     env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ * x₂ ≡ x} →
     env ⊢ e₁ *' e₂ ⇓ Const x
 
