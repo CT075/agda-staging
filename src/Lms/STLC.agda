@@ -105,15 +105,15 @@ unwrap=> (Closure env e) k = k env e
 
 eval : ∀{τ} {Γ : Ctx Base n} → (gas : ℕ) → (env : Env Γ) → Tm Base τ Γ →
   OrTimeout (Val Base τ)
+eval-apply : ∀{τ₁ τ₂} →
+  (gas : ℕ) → Val Base (τ₁ => τ₂) → Val Base τ₁ → OrTimeout (Val Base τ₂)
+
 eval zero env _ = Timeout
 eval (suc i) env (C x) = Done (Const x)
 eval (suc _) env (V i {p}) rewrite sym p = Done (rlookupEnv env i)
 eval (suc i) env (λ' τ e) = Done (Closure env e)
-eval (suc i) env (e₁ $ e₂) = do
-  f ← eval i env e₁
-  x ← eval i env e₂
-  unwrap=> f (λ env' e → eval i (cons x env') e)
-  where open OrTimeoutOps
+eval (suc i) env (e₁ $ e₂) =
+  OrTimeoutOps.bindM2 (eval-apply i) (eval i env e₁) (eval i env e₂)
 eval (suc i) env (Let e₁ e₂) = do
   x ← eval i env e₁
   eval i (cons x env) e₂
@@ -122,6 +122,33 @@ eval (suc i) env (e₁ +' e₂) =
   OrTimeoutOps.liftA2 (liftValN2 (_+_)) (eval i env e₁) (eval i env e₂)
 eval (suc i) env (e₁ *' e₂) =
   OrTimeoutOps.liftA2 (liftValN2 (_*_)) (eval i env e₁) (eval i env e₂)
+
+eval-apply gas f x = unwrap=> f (λ env e → eval gas (cons x env) e)
+
+data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
+  eval-c : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
+  eval-vl : ∀{Γ : Ctx Base n} {env : Env Γ} i vl →
+    {rlookupEnv env i ≡ vl} →
+    env ⊢ V i {refl} ⇓ vl
+  eval-λ : ∀{Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} (env : Env Γ) →
+    env ⊢ λ' τ e ⇓ Closure env e
+  eval-$ : ∀{n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
+    {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v}
+    {env : Env Γ} →
+    env ⊢ e₁ ⇓ (Closure env' e') → env ⊢ e₂ ⇓ x →
+    cons x env' ⊢ e' ⇓ v →
+    env ⊢ (e₁ $ e₂) ⇓ v
+  eval-let : ∀{τ₁ τ₂} {Γ : Ctx Base n}
+    {e₁ : Tm Base τ₁ Γ} {e₂ : Tm Base τ₂ (τ₁ ∷ Γ)}
+    {x v} {env : Env Γ} →
+    env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
+    env ⊢ Let e₁ e₂ ⇓ v
+  eval-+ : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ x} →
+    env ⊢ e₁ +' e₂ ⇓ Const x
+  eval-* : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ * x₂ ≡ x} →
+    env ⊢ e₁ *' e₂ ⇓ Const x
 
 -- TODO: What is the relationship between env1/env2 and env?
 -- with namesets, this is easy
