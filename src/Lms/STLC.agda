@@ -1,18 +1,17 @@
 module Lms.STLC where
 
-open import Data.Unit using (⊤)
-open import Data.Empty using (⊥)
 open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
 open import Data.Fin as Fin using (Fin)
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_; _*_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
+open import Data.Gas
 open import Data.Vec.Extensions
 
 -- Setup
 
-variable
+private variable
   T : Set
   n : ℕ
 
@@ -24,7 +23,7 @@ data W : Set where
   Base : W
   Staged : W
 
-variable w : W
+private variable w : W
 
 data Typ : W → Set where
   N : Typ w
@@ -93,24 +92,6 @@ lookupEnv (cons x xs) (Fin.suc i) = lookupEnv xs i
 rlookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (rlookup Γ i)
 rlookupEnv env i = lookupEnv (revEnv env) i
 
-data OrTimeout (T : Set) : Set where
-  Done : T → OrTimeout T
-  Timeout : OrTimeout T
-
-module OrTimeoutOps where
-  _>>=_ : {A B : Set} → OrTimeout A → (A → OrTimeout B) → OrTimeout B
-  Timeout >>= _ = Timeout
-  Done x >>= f = f x
-
-  liftA2 : {A B C : Set} → (A → B → C) → OrTimeout A → OrTimeout B → OrTimeout C
-  liftA2 f ma mb = do
-    a ← ma
-    b ← mb
-    Done (f a b)
-
-  bind : {A B : Set} → (A → OrTimeout B) → OrTimeout A → OrTimeout B
-  bind f x = x >>= f
-
 unwrapN : Val w N → (ℕ → T) → T
 unwrapN (Const n) k = k n
 
@@ -141,36 +122,6 @@ eval (suc i) env (e₁ +' e₂) =
   OrTimeoutOps.liftA2 (liftValN2 (_+_)) (eval i env e₁) (eval i env e₂)
 eval (suc i) env (e₁ *' e₂) =
   OrTimeoutOps.liftA2 (liftValN2 (_*_)) (eval i env e₁) (eval i env e₂)
-
-eval-weaken-gas : ∀{τ} {Γ : Ctx Base n} {env : Env Γ} {v}
-  gas (e : Tm Base τ Γ) →
-  eval gas env e ≡ Done v → eval (suc gas) env e ≡ Done v
-eval-weaken-gas gas (C x) p rewrite p = refl
-
-data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
-  eval-c : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
-  eval-vl : ∀{Γ : Ctx Base n} {env : Env Γ} i vl →
-    {rlookupEnv env i ≡ vl} →
-    env ⊢ V i {refl} ⇓ vl
-  eval-λ : ∀{Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} (env : Env Γ) →
-    env ⊢ λ' τ e ⇓ Closure env e
-  eval-$ : ∀{n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
-    {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v}
-    {env : Env Γ} →
-    env ⊢ e₁ ⇓ (Closure env' e') → env ⊢ e₂ ⇓ x →
-    cons x env' ⊢ e' ⇓ v →
-    env ⊢ (e₁ $ e₂) ⇓ v
-  eval-let : ∀{τ₁ τ₂} {Γ : Ctx Base n}
-    {e₁ : Tm Base τ₁ Γ} {e₂ : Tm Base τ₂ (τ₁ ∷ Γ)}
-    {x v} {env : Env Γ} →
-    env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
-    env ⊢ Let e₁ e₂ ⇓ v
-  eval-+ : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
-    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ x} →
-    env ⊢ e₁ +' e₂ ⇓ Const x
-  eval-* : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
-    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ * x₂ ≡ x} →
-    env ⊢ e₁ *' e₂ ⇓ Const x
 
 -- TODO: What is the relationship between env1/env2 and env?
 -- with namesets, this is easy
