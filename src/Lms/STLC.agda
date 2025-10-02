@@ -119,9 +119,9 @@ eval (suc i) env (Let e₁ e₂) = do
   eval i (cons x env) e₂
   where open OrTimeoutOps
 eval (suc i) env (e₁ +' e₂) =
-  OrTimeoutOps.liftA2 (liftValN2 (_+_)) (eval i env e₁) (eval i env e₂)
+  OrTimeoutOps.liftA2 (liftValN2 _+_) (eval i env e₁) (eval i env e₂)
 eval (suc i) env (e₁ *' e₂) =
-  OrTimeoutOps.liftA2 (liftValN2 (_*_)) (eval i env e₁) (eval i env e₂)
+  OrTimeoutOps.liftA2 (liftValN2 _*_) (eval i env e₁) (eval i env e₂)
 
 eval-apply gas f x = unwrap=> f (λ env e → eval gas (cons x env) e)
 

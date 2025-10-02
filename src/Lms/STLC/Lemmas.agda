@@ -28,30 +28,74 @@ eval-weaken-gas {env = env} {v = v} (gas @ (suc g)) (e₁ $ e₂) p = begin
   eval (suc gas) env (e₁ $ e₂)
     ≡⟨⟩
   bindM2 (eval-apply gas) (eval gas env e₁) (eval gas env e₂)
-    ≡⟨ bindM2-sub-both (eval-apply gas) fp xp ⟩
+    ≡⟨ bindM2-sub2 (eval-apply gas) eval₁→f eval₂→x ⟩
   bindM2 (eval-apply gas) (Done f) (Done x)
     ≡⟨⟩
   eval-apply gas f x
-    ≡⟨ eval-apply-weaken-gas g f x (bindM2-done (proj₂ mfp) (proj₂ mxp) p) ⟩
+    ≡⟨ eval-apply-weaken-gas g f x app→v ⟩
   Done v
     ∎
   where
     open OrTimeoutOps
     open ≡-Reasoning
 
-    mfp : ∃[ f ](eval g env e₁ ≡ Done f)
-    mfp = bindM2-done₁ _ (eval g env e₁) (eval g env e₂) p
-    f = proj₁ mfp
-    fp : eval gas env e₁ ≡ Done f
-    fp = eval-weaken-gas g e₁ (proj₂ mfp)
+    intermediates : bindM2Intermediates (eval-apply g) (eval g env e₁) (eval g env e₂) v
+    intermediates = bindM2-done (eval g env e₁) (eval g env e₂) p
 
-    mxp : ∃[ x ](eval g env e₂ ≡ Done x)
-    mxp = bindM2-done₂ _ (eval g env e₁) (eval g env e₂) p
-    x = proj₁ mxp
-    xp : eval gas env e₂ ≡ Done x
-    xp = eval-weaken-gas g e₂ (proj₂ mxp)
+    open bindM2Intermediates
+    f = fst intermediates
+    x = snd intermediates
+    eval₁→f = eval-weaken-gas g e₁ (mfst→fst intermediates)
+    eval₂→x = eval-weaken-gas g e₂ (msnd→snd intermediates)
+    app→v = run-f intermediates
 eval-weaken-gas (suc g) (Let e₁ e₂) p = {!!}
-eval-weaken-gas (suc g) (e₁ +' e₂) p = {!!}
-eval-weaken-gas (suc g) (e₁ *' e₂) p = {!!}
+eval-weaken-gas {env = env} {v = v} (gas @ (suc g)) (e₁ +' e₂) p = begin
+  eval (suc gas) env (e₁ +' e₂)
+    ≡⟨⟩
+  liftA2 (liftValN2 Nat._+_) (eval gas env e₁) (eval gas env e₂)
+    ≡⟨ liftA2-sub2 (liftValN2 Nat._+_) eval₁→x₁ eval₂→x₂ ⟩
+  liftA2 (liftValN2 Nat._+_) (Done x₁) (Done x₂)
+    ≡⟨⟩
+  Done (liftValN2 Nat._+_ x₁ x₂)
+    ≡⟨ cong Done x₁+x₂≡v ⟩
+  Done v
+    ∎
+  where
+    open OrTimeoutOps
+    open ≡-Reasoning
+
+    intermediates : liftA2Intermediates (liftValN2 Nat._+_) (eval g env e₁) (eval g env e₂) v
+    intermediates = liftA2-done (eval g env e₁) (eval g env e₂) p
+
+    open liftA2Intermediates
+    x₁ = fst intermediates
+    x₂ = snd intermediates
+    eval₁→x₁ = eval-weaken-gas g e₁ (afst→fst intermediates)
+    eval₂→x₂ = eval-weaken-gas g e₂ (asnd→snd intermediates)
+    x₁+x₂≡v = run-f intermediates
+eval-weaken-gas {env = env} {v = v} (gas @ (suc g)) (e₁ *' e₂) p = begin
+  eval (suc gas) env (e₁ *' e₂)
+    ≡⟨⟩
+  liftA2 (liftValN2 Nat._*_) (eval gas env e₁) (eval gas env e₂)
+    ≡⟨ liftA2-sub2 (liftValN2 Nat._*_) eval₁→x₁ eval₂→x₂ ⟩
+  liftA2 (liftValN2 Nat._*_) (Done x₁) (Done x₂)
+    ≡⟨⟩
+  Done (liftValN2 Nat._*_ x₁ x₂)
+    ≡⟨ cong Done x₁*x₂≡v ⟩
+  Done v
+    ∎
+  where
+    open OrTimeoutOps
+    open ≡-Reasoning
+
+    intermediates : liftA2Intermediates (liftValN2 Nat._*_) (eval g env e₁) (eval g env e₂) v
+    intermediates = liftA2-done (eval g env e₁) (eval g env e₂) p
+
+    open liftA2Intermediates
+    x₁ = fst intermediates
+    x₂ = snd intermediates
+    eval₁→x₁ = eval-weaken-gas g e₁ (afst→fst intermediates)
+    eval₂→x₂ = eval-weaken-gas g e₂ (asnd→snd intermediates)
+    x₁*x₂≡v = run-f intermediates
 
 eval-apply-weaken-gas gas f x p = {!!}

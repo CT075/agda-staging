@@ -14,42 +14,63 @@ done≢timeout ()
 
 open OrTimeoutOps
 
-bindM2-sub₁ : ∀ (f : A → B → OrTimeout C) {mx} my {v} →
-  mx ≡ v → bindM2 f mx my ≡ bindM2 f v my
-bindM2-sub₁ f my = cong (λ t → bindM2 f t my)
-
-bindM2-sub₂ : ∀ (f : A → B → OrTimeout C) mx {my} {v} →
-  my ≡ v → bindM2 f mx my ≡ bindM2 f mx v
-bindM2-sub₂ f mx = cong (bindM2 f mx)
-
-bindM2-sub-both : ∀ (f : A → B → OrTimeout C) {mx my mx' my'} →
-  mx ≡ mx' → my ≡ my' → bindM2 f mx my ≡ bindM2 f mx' my'
-bindM2-sub-both f {mx = mx} {my = my} {mx' = mx'} {my' = my'} mx≡mx' my≡my' =
+liftA2-sub2 : ∀ (f : A → B → C) {ax ay ax' ay'} →
+  ax ≡ ax' → ay ≡ ay' → liftA2 f ax ay ≡ liftA2 f ax' ay'
+liftA2-sub2 f {ax = ax} {ay = ay} {ax' = ax'} {ay' = ay'} ax≡ax' ay≡ay' =
   begin
-    bindM2 f mx my ≡⟨ bindM2-sub₁ f my mx≡mx' ⟩
-    bindM2 f mx' my ≡⟨ bindM2-sub₂ f mx' my≡my' ⟩
+    liftA2 f ax ay ≡⟨ cong (λ t → liftA2 f t ay) ax≡ax' ⟩
+    liftA2 f ax' ay ≡⟨ cong (liftA2 f ax') ay≡ay' ⟩
+    liftA2 f ax' ay'
+  ∎
+  where open ≡-Reasoning
+
+record liftA2Intermediates
+    (f : A → B → C)
+    (afst : OrTimeout A)
+    (asnd : OrTimeout B)
+    (v : C) : Set where
+  constructor la2i
+  field
+    fst : A
+    snd : B
+    afst→fst : afst ≡ Done fst
+    asnd→snd : asnd ≡ Done snd
+    run-f : f fst snd ≡ v
+
+liftA2-done : ∀ {f : A → B → C} ax ay {v} →
+  liftA2 f ax ay ≡ Done v → liftA2Intermediates f ax ay v
+liftA2-done Timeout _ p = ⊥-elim (done≢timeout (sym p))
+liftA2-done (Done x) Timeout p = ⊥-elim (done≢timeout (sym p))
+liftA2-done {f = f} (Done x) (Done y) {v} p = la2i x y refl refl (unDone-≡ p)
+  where
+    unDone-≡ : Done (f x y) ≡ Done v → f x y ≡ v
+    unDone-≡ refl = refl
+
+bindM2-sub2 : ∀ (f : A → B → OrTimeout C) {mx my mx' my'} →
+  mx ≡ mx' → my ≡ my' → bindM2 f mx my ≡ bindM2 f mx' my'
+bindM2-sub2 f {mx = mx} {my = my} {mx' = mx'} {my' = my'} mx≡mx' my≡my' =
+  begin
+    bindM2 f mx my ≡⟨ cong (λ t → bindM2 f t my) mx≡mx' ⟩
+    bindM2 f mx' my ≡⟨ cong (bindM2 f mx') my≡my' ⟩
     bindM2 f mx' my'
   ∎
   where open ≡-Reasoning
 
-bindM2-done₁ : ∀ (f : A → B → OrTimeout C) mx my {v} →
-  bindM2 f mx my ≡ Done v → ∃[ x ](mx ≡ Done x)
-bindM2-done₁ f Timeout _ p = ⊥-elim (done≢timeout (sym p))
-bindM2-done₁ f (Done x) _ p = (x , refl)
+record bindM2Intermediates
+    (f : A → B → OrTimeout C)
+    (mfst : OrTimeout A)
+    (msnd : OrTimeout B)
+    (v : C) : Set where
+  constructor bm2i
+  field
+    fst : A
+    snd : B
+    mfst→fst : mfst ≡ Done fst
+    msnd→snd : msnd ≡ Done snd
+    run-f : f fst snd ≡ Done v
 
-bindM2-done₂ : ∀ (f : A → B → OrTimeout C) mx my {v} →
-  bindM2 f mx my ≡ Done v → ∃[ v' ](my ≡ Done v')
-bindM2-done₂ f Timeout _ p = ⊥-elim (done≢timeout (sym p))
-bindM2-done₂ f (Done x) Timeout p = ⊥-elim (done≢timeout (sym p))
-bindM2-done₂ f (Done x) (Done y) p = (y , refl)
-
-bindM2-done : ∀ {f : A → B → OrTimeout C} {mx my x y v} →
-  mx ≡ Done x → my ≡ Done y → bindM2 f mx my ≡ Done v →
-  f x y ≡ Done v
-bindM2-done {f = f} {mx = mx} {my = my} {x = x} {y = y} {v = v} px py p = sym (begin
-  Done v ≡⟨ sym p ⟩
-  bindM2 f mx my ≡⟨ bindM2-sub-both f px py ⟩
-  bindM2 f (Done x) (Done y) ≡⟨⟩
-  f x y
-  ∎)
-  where open ≡-Reasoning
+bindM2-done : ∀ {f : A → B → OrTimeout C} mx my {v} →
+  bindM2 f mx my ≡ Done v → bindM2Intermediates f mx my v
+bindM2-done Timeout _ p = ⊥-elim (done≢timeout (sym p))
+bindM2-done (Done x) Timeout p = ⊥-elim (done≢timeout (sym p))
+bindM2-done {f = f} (Done x) (Done y) {v = v} p = bm2i x y refl refl p
