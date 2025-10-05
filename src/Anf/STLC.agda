@@ -4,7 +4,7 @@ open import Data.Fin as Fin using (Fin)
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_; _*_)
 open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
-open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
+open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl; trans)
 
 open import Data.Gas
 open import Data.Vec.Extensions
@@ -33,3 +33,7 @@ data Tm : {n : ℕ} → Typ → Ctx n → Set where
   -- Nat
   _+'_ : ∀{Γ : Ctx n} → Tm N Γ → Tm N Γ → Tm N Γ
   _*'_ : ∀{Γ : Ctx n} → Tm N Γ → Tm N Γ → Tm N Γ
+
+data Env : Ctx n → Set where
+  nil : Env []
+  cons : ∀{τ} {Γ : Ctx n} → Tm τ Γ → Env Γ → Env (τ ∷ Γ)

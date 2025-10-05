@@ -4,6 +4,7 @@ open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
 open import Data.Fin as Fin using (Fin)
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_; _*_)
+open import Data.Product using (_,_; _×_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
 open import Data.Gas
@@ -98,11 +99,6 @@ unwrapN (Const n) k = k n
 liftValN2 : (ℕ → ℕ → ℕ) → Val w N → Val w N → Val w N
 liftValN2 f cx₁ cx₂ = unwrapN cx₁ (λ x₁ → unwrapN cx₂ (λ x₂ → Const (f x₁ x₂)))
 
-unwrap=> : ∀{τ₁ τ₂} →
-  Val w (τ₁ => τ₂) →
-  (∀{n} {Γ : Ctx w n} → Env Γ → Tm w τ₂ (τ₁ ∷ Γ) → T) → T
-unwrap=> (Closure env e) k = k env e
-
 eval : ∀{τ} {Γ : Ctx Base n} → (gas : ℕ) → (env : Env Γ) → Tm Base τ Γ →
   OrTimeout (Val Base τ)
 eval-apply : ∀{τ₁ τ₂} →
@@ -123,7 +119,7 @@ eval (suc i) env (e₁ +' e₂) =
 eval (suc i) env (e₁ *' e₂) =
   OrTimeoutOps.liftA2 (liftValN2 _*_) (eval i env e₁) (eval i env e₂)
 
-eval-apply gas f x = unwrap=> f (λ env e → eval gas (cons x env) e)
+eval-apply gas (Closure env e) x = eval gas (cons x env) e
 
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
   eval-c : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x

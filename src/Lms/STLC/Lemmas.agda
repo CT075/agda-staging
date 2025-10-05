@@ -48,7 +48,9 @@ eval-weaken-gas {env = env} {v = v} (gas @ (suc g)) (e₁ $ e₂) p = begin
     eval₁→f = eval-weaken-gas g e₁ (mfst→fst intermediates)
     eval₂→x = eval-weaken-gas g e₂ (msnd→snd intermediates)
     app→v = run-f intermediates
-eval-weaken-gas (suc g) (Let e₁ e₂) p = {!!}
+eval-weaken-gas {env = env} (suc g) (Let e₁ e₂) p with eval g env e₁
+... | Timeout = ⊥-elim {!!}
+... | Done x = {!!}
 eval-weaken-gas {env = env} {v = v} (gas @ (suc g)) (e₁ +' e₂) p = begin
   eval (suc gas) env (e₁ +' e₂)
     ≡⟨⟩
@@ -98,4 +100,4 @@ eval-weaken-gas {env = env} {v = v} (gas @ (suc g)) (e₁ *' e₂) p = begin
     eval₂→x₂ = eval-weaken-gas g e₂ (asnd→snd intermediates)
     x₁*x₂≡v = run-f intermediates
 
-eval-apply-weaken-gas gas f x p = {!!}
+eval-apply-weaken-gas gas (Closure _ e) x p = eval-weaken-gas gas e p
