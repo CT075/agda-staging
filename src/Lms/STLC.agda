@@ -4,7 +4,6 @@ open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
 open import Data.Fin as Fin using (Fin)
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_; _*_)
-open import Data.Product using (_,_; _×_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
 open import Data.Gas
@@ -14,7 +13,7 @@ open import Data.Vec.Extensions
 
 private variable
   T : Set
-  n : ℕ
+  n n' : ℕ
 
 -- Source
 
@@ -31,8 +30,9 @@ data Typ : W → Set where
   _=>_ : Typ w → Typ w → Typ w
   Rep : Typ Base → Typ Staged
 
-data weakensTo : Typ Base → Typ Staged → Set where
-  weaken-N : weakensTo N N
+data IsBase : Typ Base → Typ Staged → Set where
+  base-N : IsBase N N
+  base-=> : ∀{A A' B B'} → IsBase A A' → IsBase B B' → IsBase (A => B) (A' => B')
 
 Ctx : W → ℕ → Set
 Ctx w = Vec (Typ w)
@@ -55,12 +55,13 @@ data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   _+'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
   _*'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
 
-  lift : ∀{Γ : Ctx Staged n} {τbase τ} → {wk : weakensTo τbase τ} →
-    Tm Staged τ Γ → Tm Staged (Rep τbase) Γ
+  CC : ∀{Γ} → Tm Staged N Γ → Tm Staged {n} (Rep N) Γ
+  --λλ
   _++_ : ∀{Γ : Ctx Staged n} →
     Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
   _**_ : ∀{Γ : Ctx Staged n} →
     Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
+  --_$$_
 
 -- TODO: factor out all the Env lemmas
 
@@ -76,11 +77,13 @@ data Val where
   Closure : ∀{τ₁ τ₂} {Γ : Ctx w n} →
     (env : Env Γ) → Tm w τ₂ (τ₁ ∷ Γ) →
     Val w (τ₁ => τ₂)
+  CConst : ℕ → Val Staged (Rep N)
+  CVar : (τ : Typ Base) → ℕ → Val Staged (Rep τ)
 
 revEnv : ∀{Γ : Ctx w n} → Env Γ → Env (Vec.reverse Γ)
 revEnv nil = nil
 revEnv (cons {τ = τ} {Γ = Γ} x xs) rewrite reverse-∷ τ Γ = snoc (revEnv xs) x
-    where
+  where
     _∷ʳ_ = Vec._∷ʳ_
     snoc : ∀{Γ : Ctx w n} {τ} → Env Γ → Val w τ → Env (Γ ∷ʳ τ)
     snoc nil x = cons x nil
@@ -92,34 +95,6 @@ lookupEnv (cons x xs) (Fin.suc i) = lookupEnv xs i
 
 rlookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (rlookup Γ i)
 rlookupEnv env i = lookupEnv (revEnv env) i
-
-unwrapN : Val w N → (ℕ → T) → T
-unwrapN (Const n) k = k n
-
-liftValN2 : (ℕ → ℕ → ℕ) → Val w N → Val w N → Val w N
-liftValN2 f cx₁ cx₂ = unwrapN cx₁ (λ x₁ → unwrapN cx₂ (λ x₂ → Const (f x₁ x₂)))
-
-eval : ∀{τ} {Γ : Ctx Base n} → (gas : ℕ) → (env : Env Γ) → Tm Base τ Γ →
-  OrTimeout (Val Base τ)
-eval-apply : ∀{τ₁ τ₂} →
-  (gas : ℕ) → Val Base (τ₁ => τ₂) → Val Base τ₁ → OrTimeout (Val Base τ₂)
-
-eval zero env _ = Timeout
-eval (suc i) env (C x) = Done (Const x)
-eval (suc _) env (V i {p}) rewrite sym p = Done (rlookupEnv env i)
-eval (suc i) env (λ' τ e) = Done (Closure env e)
-eval (suc i) env (e₁ $ e₂) =
-  OrTimeoutOps.bindM2 (eval-apply i) (eval i env e₁) (eval i env e₂)
-eval (suc i) env (Let e₁ e₂) = do
-  x ← eval i env e₁
-  eval i (cons x env) e₂
-  where open OrTimeoutOps
-eval (suc i) env (e₁ +' e₂) =
-  OrTimeoutOps.liftA2 (liftValN2 _+_) (eval i env e₁) (eval i env e₂)
-eval (suc i) env (e₁ *' e₂) =
-  OrTimeoutOps.liftA2 (liftValN2 _*_) (eval i env e₁) (eval i env e₂)
-
-eval-apply gas (Closure env e) x = eval gas (cons x env) e
 
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
   eval-c : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
@@ -146,8 +121,26 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
     env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ * x₂ ≡ x} →
     env ⊢ e₁ *' e₂ ⇓ Const x
 
--- TODO: What is the relationship between env1/env2 and env?
--- with namesets, this is easy
--- with de bruijin, need to reason about interleaving
---correct : ∀{τ} → (e : Tm Staged (Rep τ)) →
---  eval env2 (evalms env1 e) ≡ eval env (forget e)
+data Block : ∀{n} → Ctx Base n → Set where
+  bnil : ∀{Γ : Ctx Base n} → Block Γ
+  bcons : ∀{Γ : Ctx Base n} {τ} → Tm Base τ Γ → Block Γ → Block (τ ∷ Γ)
+
+infix 4 _[_,_]⊢_⇓_▷⟨_,_⟩
+data _[_,_]⊢_⇓_▷⟨_,_⟩ : ∀{τ} {Γ : Ctx Staged n} {Δ Δ' : Ctx Base n'} →
+    Env Γ → Block Δ → ℕ →
+    Tm Staged τ Γ →
+    Val Staged τ → Block Δ' → ℕ → Set
+  where
+  evalms-c : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {env : Env Γ} {b : Block Δ} {fresh} x →
+    env [ b , fresh ]⊢ C x ⇓ Const x ▷⟨ b , fresh ⟩
+  evalms-vl : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {env : Env Γ} {b : Block Δ} {fresh} i vl →
+    {rlookupEnv env i ≡ vl} →
+    env [ b , fresh ]⊢ V i {refl} ⇓ vl ▷⟨ b , fresh ⟩
+
+{-
+evalms env stblock fresh (C x) = (Const x , stblock , fresh)
+evalms env stblock fresh (e₁ $$ e₂) =
+  let (Code f, stblock', fresh') = evalms env stblock fresh e₁
+      (Code x, stblock'', fresh'') = evalms env stblock' fresh' e₂
+   in (fresh'' , (f $ x) ∷ stblock' , suc fresh'')
+-}
