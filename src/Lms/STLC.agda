@@ -126,6 +126,8 @@ record MState : Set where
     -- of the terms in the block more annoying.
     stFresh : ℕ
 
+data _reifies-to_ : ∀{τ} {Δ : Ctx Base n} → Val Staged (Rep τ) → Tm Base τ Δ → Set where
+
 private variable
   σ σ' σ'' σ''' : MState
 
@@ -155,3 +157,6 @@ data _[_]⊢_⇓_▷_ : ∀{τ} {Γ : Ctx Staged n} →
   evalms-CC : ∀{Γ : Ctx Staged n} {env : Env Γ} {e x} →
     env [ σ ]⊢ e ⇓ Const x ▷ σ' →
     env [ σ ]⊢ CC e ⇓ CConst x ▷ σ'
+  evalms-++ : ∀{Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ c₁ c₂} →
+    env [ σ ]⊢ e₁ ⇓ c₁ ▷ σ' → env [ σ' ]⊢ e₂ ⇓ c₂ ▷ σ'' →
+    env [ σ ]⊢ e₁ ++ e₂ ⇓ _ ▷ _
