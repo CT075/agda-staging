@@ -6,7 +6,6 @@ open import Data.Fin as Fin using (Fin)
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
-open import Data.Gas
 open import Data.Vec.Extensions
 
 -- Setup
@@ -94,52 +93,58 @@ rlookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (rlookup Γ 
 rlookupEnv env i = lookupEnv (revEnv env) i
 
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
-  eval-c : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
-  eval-vl : ∀{Γ : Ctx Base n} {env : Env Γ} i vl →
-    {rlookupEnv env i ≡ vl} →
+  eval-C : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
+  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} i vl → {rlookupEnv env i ≡ vl} →
     env ⊢ V i {refl} ⇓ vl
-  eval-λ : ∀{Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} {env : Env Γ} →
+  eval-λ : ∀{Γ : Ctx Base n} {env : Env Γ} {τ τ'} {e : Tm Base τ' _} →
     env ⊢ λ' τ e ⇓ Closure env e
-  eval-$ : ∀{n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
-    {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v}
-    {env : Env Γ} →
+  eval-$ : ∀{Γ : Ctx Base n} {env : Env Γ} {Γ' : Ctx Base n'} {env' : Env Γ'}
+    {τ₁ τ₂} {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v} →
     env ⊢ e₁ ⇓ (Closure env' e') → env ⊢ e₂ ⇓ x →
     cons x env' ⊢ e' ⇓ v →
     env ⊢ (e₁ $ e₂) ⇓ v
-  eval-let : ∀{τ₁ τ₂} {Γ : Ctx Base n}
-    {e₁ : Tm Base τ₁ Γ} {e₂ : Tm Base τ₂ (τ₁ ∷ Γ)}
-    {x v} {env : Env Γ} →
+  eval-let : ∀{Γ : Ctx Base n} {env : Env Γ} {τ₁ τ₂}
+    {e₁ : Tm Base τ₁ Γ} {e₂ : Tm Base τ₂ _} {x v} →
     env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
     env ⊢ Let e₁ e₂ ⇓ v
-  eval-+ : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
-    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ x} →
-    env ⊢ e₁ +' e₂ ⇓ Const x
+  eval-+ : ∀{Γ : Ctx Base n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ v} →
+    env ⊢ e₁ +' e₂ ⇓ Const v
 
 data Block : ∀{n} → Ctx Base n → Set where
   bnil : ∀{Γ : Ctx Base n} → Block Γ
   bcons : ∀{Γ : Ctx Base n} {τ} → Tm Base τ Γ → Block Γ → Block (τ ∷ Γ)
 
-infix 4 _[_,_]⊢_⇓_▷⟨_,_⟩
-data _[_,_]⊢_⇓_▷⟨_,_⟩ : ∀{a b τ} {Γ : Ctx Staged n} {Δ : Ctx Base a} {Δ' : Ctx Base b} →
-    Env Γ → Block Δ → ℕ →
-    Tm Staged τ Γ →
-    Val Staged τ → Block Δ' → ℕ → Set
+record MState : Set where
+  constructor ⟨_∶_,_⟩
+  field
+    {len} : ℕ
+    stCtx : Ctx Base len
+    stBlock : Block stCtx
+    stFresh : ℕ
+
+private variable
+  σ σ' σ'' σ''' : MState
+
+infix 4 _[_]⊢_⇓_▷_
+data _[_]⊢_⇓_▷_ : ∀{τ} {Γ : Ctx Staged n} →
+    Env Γ → MState → Tm Staged τ Γ → Val Staged τ → MState → Set
   where
-  evalms-c : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {env : Env Γ} {b : Block Δ} {fresh} x →
-    env [ b , fresh ]⊢ C x ⇓ Const x ▷⟨ b , fresh ⟩
-  evalms-vl : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {env : Env Γ} {b : Block Δ} {fresh} i vl →
-    {rlookupEnv env i ≡ vl} →
-    env [ b , fresh ]⊢ V i {refl} ⇓ vl ▷⟨ b , fresh ⟩
-  evalms-λ : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {τ τ'}
-    {e : Tm Staged τ' (τ ∷ Γ)} {env : Env Γ} {b : Block Δ} {fresh} →
-    env [ b , fresh ]⊢ λ' τ e ⇓ Closure env e ▷⟨ b , fresh ⟩
-  evalms-$ : ∀{n₀ n₁ n₂ n₃}
-    {Γ : Ctx Staged n} {Γ' : Ctx Staged n'} {env : Env Γ} {env' : Env Γ'}
-    {τ₁ τ₂} {e₁ : Tm Staged (τ₁ => τ₂) Γ} {e₂ x e' v}
-    {Δ : Ctx Base n₀} {Δ' : Ctx Base n₁} {Δ'' : Ctx Base n₂} {Δ''' : Ctx Base n₃}
-    {b : Block Δ} {b' : Block Δ'} {b'' : Block Δ''} {b''' : Block Δ'''}
-    {fresh fresh' fresh'' fresh'''} →
-    env [ b , fresh ]⊢ e₁ ⇓ (Closure env' e') ▷⟨ b' , fresh' ⟩ →
-    env [ b' , fresh' ]⊢ e₂ ⇓ x ▷⟨ b'' , fresh'' ⟩ →
-    (cons x env') [ b'' , fresh'' ]⊢ e' ⇓ v ▷⟨ b''' , fresh''' ⟩ →
-    env [ b , fresh ]⊢ e₁ $ e₂ ⇓ v ▷⟨ b''' , fresh''' ⟩
+  evalms-C : ∀{Γ : Ctx Staged n} {env : Env Γ} x →
+    env [ σ ]⊢ C x ⇓ Const x ▷ σ
+  evalms-V : ∀{Γ : Ctx Staged n} {env : Env Γ} i v → {rlookupEnv env i ≡ v} →
+    env [ σ ]⊢ V i {refl} ⇓ v ▷ σ
+  evalms-λ : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ τ'} {e : Tm Staged τ' (τ ∷ Γ)} →
+    env [ σ ]⊢ λ' τ e ⇓ Closure env e ▷ σ
+  evalms-$ : ∀{Γ : Ctx Staged n} {env : Env Γ} {Γ' : Ctx Staged n'} {env' : Env Γ'}
+    {τ₁ τ₂} {e₁ : Tm Staged (τ₁ => τ₂) Γ} {e₂ x e' v} →
+    env [ σ ]⊢ e₁ ⇓ Closure env' e' ▷ σ' → env [ σ' ]⊢ e₂ ⇓ x ▷ σ'' →
+    (cons x env')[ σ'' ]⊢ e' ⇓ v ▷ σ''' →
+    env [ σ ]⊢ e₁ $ e₂ ⇓ v ▷ σ'''
+  evalms-let : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ₁ τ₂}
+    {e₁ : Tm Staged τ₁ Γ} {e₂ : Tm Staged τ₂ _} {x v} →
+    env [ σ ]⊢ e₁ ⇓ x ▷ σ' → (cons x env)[ σ' ]⊢ e₂ ⇓ v ▷ σ'' →
+    env [ σ ]⊢ Let e₁ e₂ ⇓ v ▷ σ''
+  evalms-+ : ∀{Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} → {x₁ + x₂ ≡ v} →
+    env [ σ ]⊢ e₁ ⇓ Const x₁ ▷ σ' → env [ σ' ]⊢ e₂ ⇓ Const x₂ ▷ σ'' →
+    env [ σ ]⊢ e₁ +' e₂ ⇓ Const v ▷ σ''
