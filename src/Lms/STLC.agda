@@ -116,11 +116,14 @@ data Block : ∀{n} → Ctx Base n → Set where
   bcons : ∀{Γ : Ctx Base n} {τ} → Tm Base τ Γ → Block Γ → Block (τ ∷ Γ)
 
 record MState : Set where
-  constructor ⟨_∶_,_⟩
+  constructor ⟨_,:_⟩
   field
     {len} : ℕ
-    stCtx : Ctx Base len
+    {stCtx} : Ctx Base len
     stBlock : Block stCtx
+    -- It's possible that there is some formulation that doesn't require tracking
+    -- `stFresh` separately and uses `len` instead, but it makes tracking the context
+    -- of the terms in the block more annoying.
     stFresh : ℕ
 
 private variable
@@ -148,3 +151,7 @@ data _[_]⊢_⇓_▷_ : ∀{τ} {Γ : Ctx Staged n} →
   evalms-+ : ∀{Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} → {x₁ + x₂ ≡ v} →
     env [ σ ]⊢ e₁ ⇓ Const x₁ ▷ σ' → env [ σ' ]⊢ e₂ ⇓ Const x₂ ▷ σ'' →
     env [ σ ]⊢ e₁ +' e₂ ⇓ Const v ▷ σ''
+
+  evalms-CC : ∀{Γ : Ctx Staged n} {env : Env Γ} {e x} →
+    env [ σ ]⊢ e ⇓ Const x ▷ σ' →
+    env [ σ ]⊢ CC e ⇓ CConst x ▷ σ'
