@@ -3,7 +3,7 @@ module Lms.STLC where
 open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
 open import Data.Fin as Fin using (Fin)
-open import Data.Nat as Nat using (ℕ; suc; zero; _+_; _*_)
+open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
 open import Data.Gas
@@ -53,13 +53,10 @@ data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
 
   -- Nat
   _+'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
-  _*'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
 
   CC : ∀{Γ} → Tm Staged N Γ → Tm Staged {n} (Rep N) Γ
   --λλ
   _++_ : ∀{Γ : Ctx Staged n} →
-    Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
-  _**_ : ∀{Γ : Ctx Staged n} →
     Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
   --_$$_
 
@@ -101,7 +98,7 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
   eval-vl : ∀{Γ : Ctx Base n} {env : Env Γ} i vl →
     {rlookupEnv env i ≡ vl} →
     env ⊢ V i {refl} ⇓ vl
-  eval-λ : ∀{Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} (env : Env Γ) →
+  eval-λ : ∀{Γ : Ctx Base n} {τ τ'} {e : Tm Base τ' (τ ∷ Γ)} {env : Env Γ} →
     env ⊢ λ' τ e ⇓ Closure env e
   eval-$ : ∀{n' τ₁ τ₂} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {env' : Env Γ'}
     {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v}
@@ -117,16 +114,13 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
   eval-+ : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
     env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ x} →
     env ⊢ e₁ +' e₂ ⇓ Const x
-  eval-* : ∀{Γ : Ctx Base n} {e₁ e₂} {x₁ x₂ x} {env : Env Γ} →
-    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ * x₂ ≡ x} →
-    env ⊢ e₁ *' e₂ ⇓ Const x
 
 data Block : ∀{n} → Ctx Base n → Set where
   bnil : ∀{Γ : Ctx Base n} → Block Γ
   bcons : ∀{Γ : Ctx Base n} {τ} → Tm Base τ Γ → Block Γ → Block (τ ∷ Γ)
 
 infix 4 _[_,_]⊢_⇓_▷⟨_,_⟩
-data _[_,_]⊢_⇓_▷⟨_,_⟩ : ∀{τ} {Γ : Ctx Staged n} {Δ Δ' : Ctx Base n'} →
+data _[_,_]⊢_⇓_▷⟨_,_⟩ : ∀{a b τ} {Γ : Ctx Staged n} {Δ : Ctx Base a} {Δ' : Ctx Base b} →
     Env Γ → Block Δ → ℕ →
     Tm Staged τ Γ →
     Val Staged τ → Block Δ' → ℕ → Set
@@ -136,11 +130,16 @@ data _[_,_]⊢_⇓_▷⟨_,_⟩ : ∀{τ} {Γ : Ctx Staged n} {Δ Δ' : Ctx Base
   evalms-vl : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {env : Env Γ} {b : Block Δ} {fresh} i vl →
     {rlookupEnv env i ≡ vl} →
     env [ b , fresh ]⊢ V i {refl} ⇓ vl ▷⟨ b , fresh ⟩
-
-{-
-evalms env stblock fresh (C x) = (Const x , stblock , fresh)
-evalms env stblock fresh (e₁ $$ e₂) =
-  let (Code f, stblock', fresh') = evalms env stblock fresh e₁
-      (Code x, stblock'', fresh'') = evalms env stblock' fresh' e₂
-   in (fresh'' , (f $ x) ∷ stblock' , suc fresh'')
--}
+  evalms-λ : ∀{Γ : Ctx Staged n} {Δ : Ctx Base n'} {τ τ'}
+    {e : Tm Staged τ' (τ ∷ Γ)} {env : Env Γ} {b : Block Δ} {fresh} →
+    env [ b , fresh ]⊢ λ' τ e ⇓ Closure env e ▷⟨ b , fresh ⟩
+  evalms-$ : ∀{n₀ n₁ n₂ n₃}
+    {Γ : Ctx Staged n} {Γ' : Ctx Staged n'} {env : Env Γ} {env' : Env Γ'}
+    {τ₁ τ₂} {e₁ : Tm Staged (τ₁ => τ₂) Γ} {e₂ x e' v}
+    {Δ : Ctx Base n₀} {Δ' : Ctx Base n₁} {Δ'' : Ctx Base n₂} {Δ''' : Ctx Base n₃}
+    {b : Block Δ} {b' : Block Δ'} {b'' : Block Δ''} {b''' : Block Δ'''}
+    {fresh fresh' fresh'' fresh'''} →
+    env [ b , fresh ]⊢ e₁ ⇓ (Closure env' e') ▷⟨ b' , fresh' ⟩ →
+    env [ b' , fresh' ]⊢ e₂ ⇓ x ▷⟨ b'' , fresh'' ⟩ →
+    (cons x env') [ b'' , fresh'' ]⊢ e' ⇓ v ▷⟨ b''' , fresh''' ⟩ →
+    env [ b , fresh ]⊢ e₁ $ e₂ ⇓ v ▷⟨ b''' , fresh''' ⟩
