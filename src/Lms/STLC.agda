@@ -2,9 +2,12 @@ module Lms.STLC where
 
 open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
 open import Data.Vec.Properties using (reverse-∷)
+open import Data.List as List
+  using (List)
+  renaming (_∷_ to _∷ₗ_; [] to nilₗ; _++_ to _++ₗ_)
 open import Data.Fin as Fin using (Fin)
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
-open import Data.Product as Product using (∃; ∃-syntax; _,_)
+open import Data.Product as Prod using (Σ; Σ-syntax; _,_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
 open import Data.Vec.Extensions
@@ -44,7 +47,7 @@ Ctx w = Vec (Typ w)
 data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   -- STLC
   C : ∀{Γ} → ℕ → Tm w {n} N Γ
-  V : ∀{Γ τ} → (i : Fin n) → {rlookup Γ i ≡ τ} → Tm w τ Γ
+  V : ∀{Γ τ} → (i : Fin n) → τ ≡ rlookup Γ i → Tm w τ Γ
   λ' : ∀(τ₁ : Typ w) {τ₂} {Γ : Ctx w n} → Tm w τ₂ (τ₁ ∷ Γ) → Tm w (τ₁ => τ₂) Γ
   _$_ : ∀{τ₁ τ₂} {Γ : Ctx w n} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w τ₂ Γ
 
@@ -69,7 +72,7 @@ data AnfVal : Set where
 data AnfTm : Set where
   _+ₐ_ : AnfVal → AnfVal → AnfTm
   _$ₐ_ : AnfVal → AnfVal → AnfTm
-  λₐ : Vec AnfVal n → AnfTm → AnfTm
+  λₐ : Typ Base → List AnfTm → AnfVal → AnfTm
 
 -- TODO: factor out all the Env lemmas
 
@@ -105,8 +108,8 @@ rlookupEnv env i = lookupEnv (revEnv env) i
 
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
   eval-C : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
-  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} i vl → {rlookupEnv env i ≡ vl} →
-    env ⊢ V i {refl} ⇓ vl
+  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} i v → v ≡ rlookupEnv env i →
+    env ⊢ V i refl ⇓ v
   eval-λ : ∀{Γ : Ctx Base n} {env : Env Γ} {τ τ'} {e : Tm Base τ' _} →
     env ⊢ λ' τ e ⇓ Closure env e
   eval-$ : ∀{Γ : Ctx Base n} {env : Env Γ} {Γ' : Ctx Base n'} {env' : Env Γ'}
@@ -119,50 +122,58 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
     env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
     env ⊢ Let e₁ e₂ ⇓ v
   eval-+ : ∀{Γ : Ctx Base n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} →
-    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → {x₁ + x₂ ≡ v} →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → v ≡ x₁ + x₂ →
     env ⊢ e₁ +' e₂ ⇓ Const v
 
-record MState : Set where
-  constructor [_,_]
-  field
-    {len} : ℕ
-    stBlock : Vec AnfTm len
-    stFresh : ℕ
-
 private variable
-  σ σ' σ'' σ''' : MState
+  fresh fresh' fresh'' fresh''' : ℕ
+  ts ts₁ ts₂ ts₃ : List AnfTm
 
-infix 4 _⊢⟨_,_⟩⇓⟨_,_⟩
-data _⊢⟨_,_⟩⇓⟨_,_⟩ : ∀ {τ} {Γ : Ctx Staged n} →
-    Env Γ → Tm Staged τ Γ → MState → Val Staged τ → MState → Set
+infix 4 _⊢⟨_,_⟩⇓⟨[_,_],_⟩
+data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
+  -- variable store
+  Env Γ →
+  -- term to evaluate + fresh var counter
+  Tm Staged τ Γ → ℕ →
+  -- lifted ANF terms + result + new fresh counter
+  List AnfTm → Val Staged τ → ℕ →
+  Set
   where
   evalms-C : ∀ {Γ : Ctx Staged n} {env : Env Γ} x →
-    env ⊢⟨ C x , σ ⟩⇓⟨ Const x , σ ⟩
-  evalms-V : ∀ {Γ : Ctx Staged n} {env : Env Γ} i v → {rlookupEnv env i ≡ v} →
-    env ⊢⟨ V i {refl} , σ ⟩⇓⟨ v , σ ⟩
-  evalms-λ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ τ'} {e : Tm Staged τ' (τ ∷ Γ)} →
-    env ⊢⟨ λ' τ e , σ ⟩⇓⟨ Closure env e , σ ⟩
-  evalms-$ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {Γ' : Ctx Staged n'} {env' : Env Γ'}
-    {τ₁ τ₂} {e₁ : Tm Staged (τ₁ => τ₂) Γ} {e₂ x e' v} →
-    env ⊢⟨ e₁ , σ ⟩⇓⟨ Closure env' e' , σ' ⟩ →
-    env ⊢⟨ e₂ , σ' ⟩⇓⟨ x , σ'' ⟩ →
-    (cons x env') ⊢⟨ e' , σ'' ⟩⇓⟨ v , σ''' ⟩ →
-    env ⊢⟨ e₁ $ e₂ , σ ⟩⇓⟨ v , σ''' ⟩
+    env ⊢⟨ C x , fresh ⟩⇓⟨[ nilₗ , Const x ], fresh ⟩
+  evalms-V : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ} i (v : Val _ τ) →
+    τ ≡ rlookup Γ i →
+    v ≡ rlookupEnv env i →
+    env ⊢⟨ V i refl , fresh ⟩⇓⟨[ nilₗ , v ], fresh ⟩
+  evalms-λ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ τ'}
+    {e : Tm Staged τ' (τ ∷ Γ)} →
+    env ⊢⟨ λ' τ e , fresh ⟩⇓⟨[ nilₗ , Closure env e ], fresh ⟩
+  evalms-$ : ∀ {τ₁ τ₂ ts₁ ts₂ ts₃}
+    {Γ : Ctx Staged n} {env : Env Γ}
+    {Γ' : Ctx Staged n'} {env' : Env Γ'}
+    {e₁ : Tm Staged (τ₁ => τ₂) Γ} {e₂ x e' v} →
+    env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Closure env' e' ], fresh' ⟩ →
+    env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , x ], fresh'' ⟩ →
+    (cons x env') ⊢⟨ e' , fresh'' ⟩⇓⟨[ ts₃ , v ], fresh''' ⟩ →
+    env ⊢⟨ e₁ $ e₂ , fresh ⟩⇓⟨[ ts₁ ++ₗ ts₂ ++ₗ ts₃ , v ], fresh''' ⟩
   evalms-let : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ₁ τ₂}
     {e₁ : Tm Staged τ₁ Γ} {e₂ : Tm Staged τ₂ _} {x v} →
-    env ⊢⟨ e₁ , σ ⟩⇓⟨ x , σ' ⟩ →
-    (cons x env) ⊢⟨ e₂ , σ' ⟩⇓⟨ v , σ'' ⟩ →
-    env ⊢⟨ Let e₁ e₂ , σ ⟩⇓⟨ v , σ'' ⟩
-  evalms-+ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} → {x₁ + x₂ ≡ v} →
-    env ⊢⟨ e₁ , σ ⟩⇓⟨ Const x₁ , σ' ⟩ →
-    env ⊢⟨ e₂ , σ' ⟩⇓⟨ Const x₂ , σ'' ⟩ →
-    env ⊢⟨ e₁ +' e₂ , σ ⟩⇓⟨ Const v , σ'' ⟩
+    env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , x ], fresh' ⟩ →
+    (cons x env) ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , v ], fresh'' ⟩ →
+    env ⊢⟨ Let e₁ e₂ , fresh ⟩⇓⟨[ ts₁ ++ₗ ts₂ , v ], fresh'' ⟩
+  evalms-+ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} → v ≡ x₁ + x₂ →
+    env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Const x₁ ], fresh' ⟩ →
+    env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , Const x₂ ], fresh'' ⟩ →
+    env ⊢⟨ e₁ +' e₂ , fresh ⟩⇓⟨[ ts₁ ++ₗ ts₂ , Const v ], fresh'' ⟩
 
   evalms-CC : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e x} →
-    env ⊢⟨ e , σ ⟩⇓⟨ Const x , σ' ⟩ →
-    env ⊢⟨ CC e , σ ⟩⇓⟨ Code N (Constₐ x) , σ' ⟩
+    env ⊢⟨ e , fresh ⟩⇓⟨[ ts , Const x ], fresh' ⟩ →
+    env ⊢⟨ CC e , fresh ⟩⇓⟨[ ts , Code N (Constₐ x) ], fresh' ⟩
 
-  evalms-++ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ a₁ a₂} {blk : Vec _ n'} {fresh} →
-    env ⊢⟨ e₁ , σ ⟩⇓⟨ Code N a₁ , σ' ⟩ →
-    env ⊢⟨ e₂ , σ' ⟩⇓⟨ Code N a₂ , [ blk , fresh ] ⟩ →
-    env ⊢⟨ e₁ ++ e₂ , σ ⟩⇓⟨ Code N (Varₐ fresh) , [ a₁ +ₐ a₂ ∷ blk , suc fresh ] ⟩
+  evalms-++ : ∀{Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ a₁ a₂} →
+    env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Code N a₁ ], fresh' ⟩ →
+    env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , Code N a₂ ], fresh'' ⟩ →
+    env ⊢⟨ e₁ ++ e₂ , fresh ⟩⇓⟨[
+        (a₁ +ₐ a₂) ∷ₗ ts₁ ++ₗ ts₂ , Code N (Varₐ fresh'')
+      ],
+      suc fresh'' ⟩
