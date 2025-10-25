@@ -10,6 +10,8 @@ open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
 open import Data.Product as Prod using (Σ; Σ-syntax; _,_)
 open import Relation.Binary.PropositionalEquality using (_≡_; sym; refl)
 
+open import Data.Context as Context using (_[_]=_)
+open import Data.Store as Store using (Store; cons; nil; store-lookup-syntax)
 open import Data.Vec.Extensions
 
 -- Setup
@@ -38,7 +40,7 @@ data IsBase : Typ Base → Typ Staged → Set where
   base-=> : ∀{A A' B B'} → IsBase A A' → IsBase B B' → IsBase (A => B) (A' => B')
 
 Ctx : W → ℕ → Set
-Ctx w = Vec (Typ w)
+Ctx w = Context.Ctx (Typ w)
 
 -- We use De Bruijin levels with *reversed* contexts. That is, index 0 refers
 -- to the rightmost element of `Γ`. This is because Agda is better-behaved when
@@ -47,7 +49,7 @@ Ctx w = Vec (Typ w)
 data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   -- STLC
   C : ∀{Γ} → ℕ → Tm w {n} N Γ
-  V : ∀{Γ τ} → (i : Fin n) → τ ≡ rlookup Γ i → Tm w τ Γ
+  V : ∀{Γ : Ctx w n} {τ} → (i : ℕ) → Γ [ i ]= τ → Tm w τ Γ
   λ' : ∀(τ₁ : Typ w) {τ₂} {Γ : Ctx w n} → Tm w τ₂ (τ₁ ∷ Γ) → Tm w (τ₁ => τ₂) Γ
   _$_ : ∀{τ₁ τ₂} {Γ : Ctx w n} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w τ₂ Γ
 
@@ -76,12 +78,10 @@ data AnfTm : Set where
 
 -- TODO: factor out all the Env lemmas
 
-data Env : Ctx w n → Set
+Env : Ctx w n → Set
 data Val : (w : W) → Typ w → Set
 
-data Env where
-  nil : Env {w} []
-  cons : ∀{τ} {Γ : Ctx w n} → Val w τ → Env Γ → Env (τ ∷ Γ)
+Env {w = w} Γ = Store (Typ w) (Val w) Γ
 
 data Val where
   Const : ℕ → Val w N
@@ -90,26 +90,10 @@ data Val where
     Val w (τ₁ => τ₂)
   Code : ∀ τ → AnfVal → Val Staged (Rep τ)
 
-revEnv : ∀{Γ : Ctx w n} → Env Γ → Env (Vec.reverse Γ)
-revEnv nil = nil
-revEnv (cons {τ = τ} {Γ = Γ} x xs) rewrite reverse-∷ τ Γ = snoc (revEnv xs) x
-  where
-    _∷ʳ_ = Vec._∷ʳ_
-    snoc : ∀{Γ : Ctx w n} {τ} → Env Γ → Val w τ → Env (Γ ∷ʳ τ)
-    snoc nil x = cons x nil
-    snoc (cons x' xs) x = cons x' (snoc xs x)
-
-lookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (lookup Γ i)
-lookupEnv (cons x xs) Fin.zero = x
-lookupEnv (cons x xs) (Fin.suc i) = lookupEnv xs i
-
-rlookupEnv : ∀{Γ : Ctx w n} → Env Γ → (i : Fin n) → Val w (rlookup Γ i)
-rlookupEnv env i = lookupEnv (revEnv env) i
-
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
   eval-C : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
-  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} i v → v ≡ rlookupEnv env i →
-    env ⊢ V i refl ⇓ v
+  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} {τ} i {p} v → env [ i ]↦ v ∈ τ →
+    env ⊢ V i p ⇓ v
   eval-λ : ∀{Γ : Ctx Base n} {env : Env Γ} {τ τ'} {e : Tm Base τ' _} →
     env ⊢ λ' τ e ⇓ Closure env e
   eval-$ : ∀{Γ : Ctx Base n} {env : Env Γ} {Γ' : Ctx Base n'} {env' : Env Γ'}
@@ -141,10 +125,8 @@ data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
   where
   evalms-C : ∀ {Γ : Ctx Staged n} {env : Env Γ} x →
     env ⊢⟨ C x , fresh ⟩⇓⟨[ nilₗ , Const x ], fresh ⟩
-  evalms-V : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ} i (v : Val _ τ) →
-    τ ≡ rlookup Γ i →
-    v ≡ rlookupEnv env i →
-    env ⊢⟨ V i refl , fresh ⟩⇓⟨[ nilₗ , v ], fresh ⟩
+  evalms-V : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ} i {p} v → env [ i ]↦ v ∈ τ →
+    env ⊢⟨ V i p , fresh ⟩⇓⟨[ nilₗ , v ], fresh ⟩
   evalms-λ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ τ'}
     {e : Tm Staged τ' (τ ∷ Γ)} →
     env ⊢⟨ λ' τ e , fresh ⟩⇓⟨[ nilₗ , Closure env e ], fresh ⟩
@@ -155,16 +137,16 @@ data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
     env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Closure env' e' ], fresh' ⟩ →
     env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , x ], fresh'' ⟩ →
     (cons x env') ⊢⟨ e' , fresh'' ⟩⇓⟨[ ts₃ , v ], fresh''' ⟩ →
-    env ⊢⟨ e₁ $ e₂ , fresh ⟩⇓⟨[ ts₁ ++ₗ ts₂ ++ₗ ts₃ , v ], fresh''' ⟩
+    env ⊢⟨ e₁ $ e₂ , fresh ⟩⇓⟨[ ts₃ ++ₗ ts₂ ++ₗ ts₁ , v ], fresh''' ⟩
   evalms-let : ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ₁ τ₂}
     {e₁ : Tm Staged τ₁ Γ} {e₂ : Tm Staged τ₂ _} {x v} →
     env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , x ], fresh' ⟩ →
     (cons x env) ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , v ], fresh'' ⟩ →
-    env ⊢⟨ Let e₁ e₂ , fresh ⟩⇓⟨[ ts₁ ++ₗ ts₂ , v ], fresh'' ⟩
+    env ⊢⟨ Let e₁ e₂ , fresh ⟩⇓⟨[ ts₂ ++ₗ ts₁ , v ], fresh'' ⟩
   evalms-+ : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} → v ≡ x₁ + x₂ →
     env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Const x₁ ], fresh' ⟩ →
     env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , Const x₂ ], fresh'' ⟩ →
-    env ⊢⟨ e₁ +' e₂ , fresh ⟩⇓⟨[ ts₁ ++ₗ ts₂ , Const v ], fresh'' ⟩
+    env ⊢⟨ e₁ +' e₂ , fresh ⟩⇓⟨[ ts₂ ++ₗ ts₁ , Const v ], fresh'' ⟩
 
   evalms-CC : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e x} →
     env ⊢⟨ e , fresh ⟩⇓⟨[ ts , Const x ], fresh' ⟩ →
@@ -174,6 +156,6 @@ data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
     env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Code N a₁ ], fresh' ⟩ →
     env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , Code N a₂ ], fresh'' ⟩ →
     env ⊢⟨ e₁ ++ e₂ , fresh ⟩⇓⟨[
-        (a₁ +ₐ a₂) ∷ₗ ts₁ ++ₗ ts₂ , Code N (Varₐ fresh'')
+        (a₁ +ₐ a₂) ∷ₗ ts₂ ++ₗ ts₁ , Code N (Varₐ fresh'')
       ],
       suc fresh'' ⟩
