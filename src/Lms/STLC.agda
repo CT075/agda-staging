@@ -94,14 +94,18 @@ data _⊢t_∈_ where
   anf-$ : ∀{Γ : Ctx Base n} {e₁ e₂ τ₁ τ₂} →
     Γ ⊢v e₁ ∈ τ₁ => τ₂ → Γ ⊢v e₂ ∈ τ₁ →
     Γ ⊢t e₁ +ₐ e₂ ∈ τ₂
-  anf-λ : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {τ τ' es v} →
-    Γ ⊢ts es ∈ Γ' → τ ∷ Γ' ⊢v v ∈ τ' →
+  anf-λ : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {Γs : Ctx Base (n' + n)}
+    {τ τ' es v} →
+    Γ' ++ᵥ Γ ≡ Γs →
+    Γ ⊢ts es ∈ Γ' → τ ∷ Γs ⊢v v ∈ τ' →
     Γ ⊢t λₐ τ es v ∈ τ => τ'
 
 data _⊢ts_∈_ where
   anf-nil : ∀{Γ : Ctx Base n} → Γ ⊢ts nilₗ ∈ []
-  anf-cons : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {x xs τ} →
-    Γ ⊢ts xs ∈ Γ' → Γ' ⊢t x ∈ τ →
+  anf-cons : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {Γs : Ctx Base (n' + n)}
+    {x xs τ} →
+    Γ' ++ᵥ Γ ≡ Γs →
+    Γ ⊢ts xs ∈ Γ' → Γs ⊢t x ∈ τ →
     Γ ⊢ts x ∷ₗ xs ∈ τ ∷ Γ'
 
 Env : Ctx w n → Set
