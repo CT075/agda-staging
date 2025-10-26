@@ -3,6 +3,7 @@ module Lms.STLC.Lemmas where
 open import Data.Nat as Nat
 open import Data.Nat.Properties as Nat
 open import Data.Product
+open import Data.Vec as Vec using ([])
 open import Data.List as List
   using (List; length)
   renaming (_∷_ to _∷ₗ_; [] to nilₗ; _++_ to _++ₗ_)
@@ -19,6 +20,20 @@ private variable
   fresh fresh' fresh'' fresh''' : ℕ
   ts ts₁ ts₂ ts₃ : List AnfTm
 
+evalms-typed : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ} {e : Tm _ τ _} {v} →
+  env ⊢⟨ e , fresh ⟩⇓⟨[ ts , v ], fresh' ⟩ →
+  (Δ : Ctx Base fresh) →
+  Σ[ Δ' ∈ Ctx Base (fresh' ∸ fresh) ](Δ ⊢ts ts ∈ Δ')
+evalms-typed {fresh = fresh} (evalms-C _) Δ rewrite n∸n≡0 fresh = [] , anf-nil
+evalms-typed {fresh = fresh} (evalms-V _ _ _) Δ rewrite n∸n≡0 fresh =
+  [] , anf-nil
+evalms-typed {fresh = fresh} evalms-λ Δ rewrite n∸n≡0 fresh = [] , anf-nil
+evalms-typed (evalms-$ x x₁ x₂) Δ = {! !}
+evalms-typed (evalms-let x x₁) Δ = {! !}
+evalms-typed (evalms-+ x x₁ x₂) Δ = {! !}
+evalms-typed (evalms-CC x) Δ = {! !}
+evalms-typed (evalms-++ x x₁) Δ = {! !}
+
 length-lemma : ∀{xs₁ : List T} {xs₂ x₁ x₂} →
   length xs₁ ≡ x₁ → length xs₂ ≡ x₂ →
   length (xs₁ ++ₗ xs₂) ≡ x₁ + x₂
@@ -32,8 +47,10 @@ evalms-fresh {fresh = fresh} (evalms-C _) = ≤-refl , sym (∣n-n∣≡0 fresh)
 evalms-fresh {fresh = fresh} (evalms-V i v x) = ≤-refl , sym (∣n-n∣≡0 fresh)
 evalms-fresh {fresh = fresh} evalms-λ = ≤-refl , sym (∣n-n∣≡0 fresh)
 evalms-fresh (evalms-$ x x₁ x₂) = {! !}
-evalms-fresh (evalms-let
-    {ts₁ = ts₁} {ts₂ = ts₂} ⟨e₁,i⟩⇓⟨[ts₁,x],i'⟩ ⟨e₂,i'⟩⇓[ts₂,v],i'') =
+evalms-fresh
+  (evalms-let
+    {ts₁ = ts₁} {ts₂ = ts₂}
+    ⟨e₁,i⟩⇓⟨[ts₁,x],i'⟩ ⟨e₂,i'⟩⇓[ts₂,v],i'') =
   let i≤i' , len[ts₁]≡∣i'-i∣ = evalms-fresh ⟨e₁,i⟩⇓⟨[ts₁,x],i'⟩
       i'≤i'' , len[ts₂]≡∣i''-i'∣ = evalms-fresh ⟨e₂,i'⟩⇓[ts₂,v],i''
       len[ts₂++ts₁]≡∣i''-i'∣+∣i'-i∣ =

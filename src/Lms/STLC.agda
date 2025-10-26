@@ -1,7 +1,8 @@
 module Lms.STLC where
 
-open import Data.Vec as Vec using (Vec; lookup; _∷_; [])
-open import Data.Vec.Properties using (reverse-∷)
+open import Data.Vec as Vec
+  using (Vec; _∷_; [])
+  renaming (_++_ to _++ᵥ_)
 open import Data.List as List
   using (List)
   renaming (_∷_ to _∷ₗ_; [] to nilₗ; _++_ to _++ₗ_)
@@ -76,7 +77,32 @@ data AnfTm : Set where
   _$ₐ_ : AnfVal → AnfVal → AnfTm
   λₐ : Typ Base → List AnfTm → AnfVal → AnfTm
 
--- TODO: factor out all the Env lemmas
+infix 4 _⊢v_∈_
+data _⊢v_∈_ : Ctx Base n → AnfVal → Typ Base → Set where
+  anf-c : ∀{Γ : Ctx Base n} x → Γ ⊢v Constₐ x ∈ N
+  anf-v : ∀{Γ : Ctx Base n} {i τ} → Γ [ i ]= τ → Γ ⊢v Varₐ i ∈ τ
+
+infix 4 _⊢t_∈_
+infix 4 _⊢ts_∈_
+data _⊢t_∈_ : Ctx Base n → AnfTm → Typ Base → Set
+data _⊢ts_∈_ : Ctx Base n → List AnfTm → Ctx Base n' → Set
+
+data _⊢t_∈_ where
+  anf-+ : ∀{Γ : Ctx Base n} {e₁ e₂} →
+    Γ ⊢v e₁ ∈ N → Γ ⊢v e₂ ∈ N →
+    Γ ⊢t e₁ +ₐ e₂ ∈ N
+  anf-$ : ∀{Γ : Ctx Base n} {e₁ e₂ τ₁ τ₂} →
+    Γ ⊢v e₁ ∈ τ₁ => τ₂ → Γ ⊢v e₂ ∈ τ₁ →
+    Γ ⊢t e₁ +ₐ e₂ ∈ τ₂
+  anf-λ : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {τ τ' es v} →
+    Γ ⊢ts es ∈ Γ' → τ ∷ Γ' ⊢v v ∈ τ' →
+    Γ ⊢t λₐ τ es v ∈ τ => τ'
+
+data _⊢ts_∈_ where
+  anf-nil : ∀{Γ : Ctx Base n} → Γ ⊢ts nilₗ ∈ []
+  anf-cons : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {x xs τ} →
+    Γ ⊢ts xs ∈ Γ' → Γ' ⊢t x ∈ τ →
+    Γ ⊢ts x ∷ₗ xs ∈ τ ∷ Γ'
 
 Env : Ctx w n → Set
 data Val : (w : W) → Typ w → Set
@@ -90,6 +116,7 @@ data Val where
     Val w (τ₁ => τ₂)
   Code : ∀ τ → AnfVal → Val Staged (Rep τ)
 
+infix 4 _⊢_⇓_
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
   eval-C : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
   eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} {τ} i {p} v → env [ i ]↦ v ∈ τ →
@@ -151,6 +178,7 @@ data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
   evalms-CC : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e x} →
     env ⊢⟨ e , fresh ⟩⇓⟨[ ts , Const x ], fresh' ⟩ →
     env ⊢⟨ CC e , fresh ⟩⇓⟨[ ts , Code N (Constₐ x) ], fresh' ⟩
+  --evalms-λλ
 
   evalms-++ : ∀{Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ a₁ a₂} →
     env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Code N a₁ ], fresh' ⟩ →
