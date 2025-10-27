@@ -200,6 +200,7 @@ evalms-typed {fresh = i} evalms-λ Δ rewrite n∸n≡0 i = [] , anf-nil
 evalms-typed (evalms-$ x x₁ x₂) Δ = {! !}
 evalms-typed (evalms-let e₁⇓[ts₁,x] e₂⇓[ts₂,v]) Δ =
   evalms-chain e₁⇓[ts₁,x] e₂⇓[ts₂,v] Δ
-evalms-typed (evalms-+ refl x₁ x₂) Δ = {! !}
+evalms-typed (evalms-+ refl e₁⇓[ts₁,x] e₂⇓[ts₂,v]) Δ =
+  evalms-chain e₁⇓[ts₁,x] e₂⇓[ts₂,v] Δ
 evalms-typed (evalms-CC e) Δ = evalms-typed e Δ
-evalms-typed (evalms-++ x x₁) Δ = {! !}
+evalms-typed (evalms-++ e₁⇓[ts₁,x] e₂⇓[ts₂,v]) Δ = {!!} , {!!}
