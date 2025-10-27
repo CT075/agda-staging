@@ -93,11 +93,11 @@ data _⊢t_∈_ where
     Γ ⊢t e₁ +ₐ e₂ ∈ N
   anf-$ : ∀{Γ : Ctx Base n} {e₁ e₂ τ₁ τ₂} →
     Γ ⊢v e₁ ∈ τ₁ => τ₂ → Γ ⊢v e₂ ∈ τ₁ →
-    Γ ⊢t e₁ +ₐ e₂ ∈ τ₂
+    Γ ⊢t e₁ $ₐ e₂ ∈ τ₂
   anf-λ : ∀{Γ : Ctx Base n} {Γ' : Ctx Base n'} {Γs : Ctx Base (n' + n)}
-    {τ τ' es v} →
+    τ {τ' es v} →
     Γ' ++ᵥ Γ ≡ Γs →
-    Γ ⊢ts es ∈ Γ' → τ ∷ Γs ⊢v v ∈ τ' →
+    τ ∷ Γ ⊢ts es ∈ Γ' → τ ∷ Γs ⊢v v ∈ τ' →
     Γ ⊢t λₐ τ es v ∈ τ => τ'
 
 data _⊢ts_∈_ where

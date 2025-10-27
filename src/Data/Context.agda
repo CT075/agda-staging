@@ -5,6 +5,7 @@ open import Data.Nat.Properties
 open import Relation.Binary.PropositionalEquality
 open import Level renaming (suc to lsuc; zero to lzero)
 import Data.Vec as Vec
+open import Data.Vec.Extensions
 
 open Vec using ([]; _∷_) public
 open Vec hiding (_[_]=_)
@@ -13,7 +14,7 @@ private variable
   ℓ : Level
   T : Set ℓ
   t t' : T
-  n n' i : ℕ
+  m n n' i : ℕ
 
 -- We use De Bruijin levels with *reversed* contexts. That is, index 0 refers
 -- to the rightmost element of `Γ`. This is because Agda is better-behaved when
@@ -30,6 +31,11 @@ data _[_]=_ {T : Set ℓ} : Ctx T n → ℕ → T → Set ℓ where
 []=→< : ∀{Γ : Ctx T n} {t : T} → Γ [ i ]= t → i < n
 []=→< here = n<1+n _
 []=→< (there Γ[i]=t) = m<n⇒m<1+n ([]=→< Γ[i]=t)
+
+launder-[]= : ∀{Γ : Ctx T n} {Δ : Ctx T m} {i t} →
+  Γ ≅ Δ → Γ [ i ]= t → Δ [ i ]= t
+launder-[]= (≅-cons xs≅ys) here rewrite ≅-len xs≅ys = here
+launder-[]= (≅-cons xs≅ys) (there Γ[i]=t) = there (launder-[]= xs≅ys Γ[i]=t)
 
 data _⊆_ {T : Set ℓ} : Ctx T n → Ctx T n' → Set ℓ where
   ⊆-refl : (Γ : Ctx T n) → Γ ⊆ Γ
