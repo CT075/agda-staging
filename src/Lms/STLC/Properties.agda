@@ -1,4 +1,9 @@
-module Lms.STLC.Lemmas where
+module Lms.STLC.Properties where
+
+-- Metatheory and miscellaneous properties of λLMS.
+--
+-- The key theorems are the various `evalms-_-typed` terms, which establish that
+-- the IR produced by evaluating a staged λLMS term is well-typed.
 
 open import Data.Nat as Nat
 open import Data.Nat.Properties as Nat
@@ -120,20 +125,53 @@ evalms-fresh-grows (evalms-CC e⇓) = evalms-fresh-grows e⇓
 evalms-fresh-grows (evalms-++ e₁⇓ e₂⇓) =
   a≤b⇒a≤1+b (≤-trans (evalms-fresh-grows e₁⇓) (evalms-fresh-grows e₂⇓))
 
+evalms-block-typed : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ} {e : Tm _ τ _} {v} →
+  (Δ : Ctx Base fresh) →
+  env ⊢⟨ e , fresh ⟩⇓⟨[ ts , v ], fresh' ⟩ →
+  Σ[ Δ' ∈ Ctx Base (fresh' ∸ fresh) ](Δ ⊢ts ts ∈ Δ')
+
+evalms-val-typed : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ}
+  {e : Tm _ (Rep τ) _} {v} {Δ' : Ctx Base (fresh' ∸ fresh)} →
+  (Δ : Ctx Base fresh) →
+  env ⊢⟨ e , fresh ⟩⇓⟨[ ts , Code τ v ], fresh' ⟩ →
+  Δ ⊢ts ts ∈ Δ' →
+  Δ' ++ᵥ Δ ⊢v v ∈ τ
+
+-- A surprisingly-messy lemma for chaining two evaluations together and
+-- collecting their ANF terms.
 evalms-chain : ∀
   {Γ₁ : Ctx Staged n} {env₁ : Env Γ₁}
   {Γ₂ : Ctx Staged n'} {env₂ : Env Γ₂}
   {τ₁ τ₂}
   {e₁ : Tm _ τ₁ _} {e₂ : Tm _ τ₂ _} {x v} →
+  (Δ : Ctx Base fresh) →
   env₁ ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , x ], fresh' ⟩ →
   env₂ ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , v ], fresh'' ⟩ →
-  (Δ : Ctx Base fresh) →
   Σ[ Δ' ∈ Ctx Base (fresh'' ∸ fresh) ](Δ ⊢ts ts₂ ++ₗ ts₁ ∈ Δ')
 
-evalms-typed : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ} {e : Tm _ τ _} {v} →
-  env ⊢⟨ e , fresh ⟩⇓⟨[ ts , v ], fresh' ⟩ →
-  (Δ : Ctx Base fresh) →
-  Σ[ Δ' ∈ Ctx Base (fresh' ∸ fresh) ](Δ ⊢ts ts ∈ Δ')
+evalms-block-typed {fresh = i} Δ (evalms-C _) rewrite n∸n≡0 i = [] , anf-nil
+evalms-block-typed {fresh = i} Δ (evalms-V _ _ _) rewrite n∸n≡0 i = [] , anf-nil
+evalms-block-typed {fresh = i} Δ evalms-λ rewrite n∸n≡0 i = [] , anf-nil
+evalms-block-typed Δ (evalms-$ x x₁ x₂) = {! !}
+evalms-block-typed Δ (evalms-let e₁⇓[ts₁,x] e₂⇓[ts₂,v]) =
+  evalms-chain Δ e₁⇓[ts₁,x] e₂⇓[ts₂,v]
+evalms-block-typed Δ (evalms-+ refl e₁⇓[ts₁,x] e₂⇓[ts₂,v]) =
+  evalms-chain Δ e₁⇓[ts₁,x] e₂⇓[ts₂,v]
+evalms-block-typed Δ (evalms-CC e) = evalms-block-typed Δ e
+evalms-block-typed Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) = Δresult , {!!}
+  where
+    Δout,Δ⊢ts₁++ts₂∈Δout = evalms-chain Δ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]
+    Δout = proj₁ Δout,Δ⊢ts₁++ts₂∈Δout
+    Δ⊢ts₁++ts₂∈Δout = proj₂ Δout,Δ⊢ts₁++ts₂∈Δout
+
+    i≤i' = evalms-fresh-grows e₁⇓[ts₁,x₁]
+    i'≤i'' = evalms-fresh-grows e₂⇓[ts₂,x₂]
+
+    Δresult,N∷Δout≅Δresult =
+      Vec.launder (N ∷ Δout) (1+[a∸b]≡[1+a]∸b (≤-trans i≤i' i'≤i''))
+    Δresult = proj₁ Δresult,N∷Δout≅Δresult
+
+evalms-val-typed = {!!}
 
 -- The reason this is so complicated despite basically being "cite the
 -- inductive hypothesis twice" is due to Agda not pushing equalities through
@@ -155,9 +193,9 @@ evalms-chain
     {fresh = i} {ts₁ = ts₁}
     {fresh' = i'} {ts₂ = ts₂}
     {fresh'' = i''}
-    e₁⇓[ts₁,x] e₂⇓[ts₂,v] Δ = Δout , proof
+    Δ e₁⇓[ts₁,x] e₂⇓[ts₂,v] = Δout , proof
   where
-    IH₁ = evalms-typed e₁⇓[ts₁,x] Δ
+    IH₁ = evalms-block-typed Δ e₁⇓[ts₁,x]
     i≤i' = evalms-fresh-grows e₁⇓[ts₁,x]
     Δ' = proj₁ IH₁
     Δ⊢ts₁∈Δ' : Δ ⊢ts ts₁ ∈ Δ'
@@ -171,7 +209,7 @@ evalms-chain
     Δ'++Δ≅Δs : Δ' ++ᵥ Δ ≅ Δs
     Δ'++Δ≅Δs = proj₂ Δs,Δ'++Δ≅Δs
 
-    IH₂ = evalms-typed e₂⇓[ts₂,v] Δs
+    IH₂ = evalms-block-typed Δs e₂⇓[ts₂,v]
     i'≤i'' = evalms-fresh-grows e₂⇓[ts₂,v]
     Δ'' = proj₁ IH₂
     Δs⊢ts₂∈Δ'' : Δs ⊢ts ts₂ ∈ Δ''
@@ -193,14 +231,3 @@ evalms-chain
 
     proof : Δ ⊢ts ts₂ ++ₗ ts₁ ∈ Δout
     proof = block-launder-out Δ''++Δ'≅Δout Δ⊢ts₂++ts₂∈Δ''++Δ'
-
-evalms-typed {fresh = i} (evalms-C _) Δ rewrite n∸n≡0 i = [] , anf-nil
-evalms-typed {fresh = i} (evalms-V _ _ _) Δ rewrite n∸n≡0 i = [] , anf-nil
-evalms-typed {fresh = i} evalms-λ Δ rewrite n∸n≡0 i = [] , anf-nil
-evalms-typed (evalms-$ x x₁ x₂) Δ = {! !}
-evalms-typed (evalms-let e₁⇓[ts₁,x] e₂⇓[ts₂,v]) Δ =
-  evalms-chain e₁⇓[ts₁,x] e₂⇓[ts₂,v] Δ
-evalms-typed (evalms-+ refl e₁⇓[ts₁,x] e₂⇓[ts₂,v]) Δ =
-  evalms-chain e₁⇓[ts₁,x] e₂⇓[ts₂,v] Δ
-evalms-typed (evalms-CC e) Δ = evalms-typed e Δ
-evalms-typed (evalms-++ e₁⇓[ts₁,x] e₂⇓[ts₂,v]) Δ = {!!} , {!!}
