@@ -35,48 +35,28 @@ private variable
   fresh fresh' fresh'' fresh''' : ℕ
   ts ts₁ ts₂ ts₃ : List AnfTm
 
+-- All these `launder` lemmas were written before I figured out how to write
+-- `≅-subst`, and removing them makes inference messier.
+
 vl-launder-ctx : ∀{Δ : Ctx Base n} {Δ' : Ctx Base m} {v τ} →
   Δ ≅ Δ' → Δ ⊢v v ∈ τ →
   Δ' ⊢v v ∈ τ
-vl-launder-ctx Δ≅Δ' (anf-c x) = anf-c x
-vl-launder-ctx Δ≅Δ' (anf-v Δ[i]=τ) = anf-v (launder-[]= Δ≅Δ' Δ[i]=τ)
+vl-launder-ctx = ≅-subst _
 
 tm-launder-ctx : ∀{Δ : Ctx Base n} {Δ' : Ctx Base m} {t τ} →
   Δ ≅ Δ' → Δ ⊢t t ∈ τ →
   Δ' ⊢t t ∈ τ
+tm-launder-ctx = ≅-subst _
 
 block-launder-ctx : ∀{Δ : Ctx Base n} {Δ' : Ctx Base m} {Δout : Ctx Base n'} →
   Δ ≅ Δ' → Δ ⊢ts ts ∈ Δout →
   Δ' ⊢ts ts ∈ Δout
-
-tm-launder-ctx Δ≅Δ' (anf-+ Δ⊢v₁∈N Δ⊢v₂∈N) =
-  anf-+ (vl-launder-ctx Δ≅Δ' Δ⊢v₁∈N) (vl-launder-ctx Δ≅Δ' Δ⊢v₂∈N)
-tm-launder-ctx Δ≅Δ' (anf-$ Δ⊢t₁∈τ₁=>τ₂ Δ⊢t₂∈τ₁) =
-  anf-$ (vl-launder-ctx Δ≅Δ' Δ⊢t₁∈τ₁=>τ₂) (vl-launder-ctx Δ≅Δ' Δ⊢t₂∈τ₁)
-tm-launder-ctx {Δ = Δ} {Δ' = Δ'}
-    Δ≅Δ' (anf-λ {Γ' = Δout} τ refl Δ⊢ts∈Δout Δs⊢v∈τ') =
-  anf-λ {Γs = Δout ++ᵥ Δ'}
-    τ
-    refl
-    (block-launder-ctx (≅-cons Δ≅Δ') Δ⊢ts∈Δout)
-    (vl-launder-ctx (≅-cons (++-subst-≅ᵣ Δout Δ≅Δ' refl)) Δs⊢v∈τ')
-
-block-launder-ctx Δ≅Δ' anf-nil = anf-nil
-block-launder-ctx Δ≅Δ' (anf-cons refl Δ⊢ts∈Δout Δout++Δ⊢v∈τ) =
-  anf-cons
-    refl
-    (block-launder-ctx Δ≅Δ' Δ⊢ts∈Δout)
-    (tm-launder-ctx (++-subst-≅ᵣ _ Δ≅Δ' refl) Δout++Δ⊢v∈τ)
+block-launder-ctx = ≅-subst _
 
 block-launder-out : ∀{Δ : Ctx Base m} {Γ : Ctx Base n} {Γ' : Ctx Base n'} {ts} →
   Γ ≅ Γ' → Δ ⊢ts ts ∈ Γ →
   Δ ⊢ts ts ∈ Γ'
-block-launder-out ≅-nil anf-nil = anf-nil
-block-launder-out (≅-cons Γ≅Γ') (anf-cons refl Δ⊢ts∈Γ Γ++Δ⊢x∈τ) =
-  anf-cons
-    refl
-    (block-launder-out Γ≅Γ' Δ⊢ts∈Γ)
-    (tm-launder-ctx (++-subst-≅ₗ Γ≅Γ' refl) Γ++Δ⊢x∈τ)
+block-launder-out = ≅-subst _
 
 vl-typ-wk : ∀{Δ : Ctx Base n} {v τ} τ' → Δ ⊢v v ∈ τ → τ' ∷ᵥ Δ ⊢v v ∈ τ
 vl-typ-wk τ (anf-c x) = anf-c x
@@ -161,13 +141,7 @@ launder-⋖ :
     {Δ : Ctx Base m} {Δ' : Ctx Base m'} →
   Δ ≅ Δ' → env ⋖ Δ →
   env ⋖ Δ'
-launder-⋖ Δ≅Δ' (nil-valid Δ) = nil-valid _
-launder-⋖ Δ≅Δ' (cons-valid (admit-N Δ v) env⋖Δ) =
-  cons-valid (admit-N _ v) (launder-⋖ Δ≅Δ' env⋖Δ)
-launder-⋖ Δ≅Δ' (cons-valid (admit-=> body info) env⋖Δ) =
-  cons-valid (admit-=> body info) (launder-⋖ Δ≅Δ' env⋖Δ)
-launder-⋖ Δ≅Δ' (cons-valid (admit-Code Δ⊢v∈τ) env⋖Δ) =
-  cons-valid (admit-Code (vl-launder-ctx Δ≅Δ' Δ⊢v∈τ)) (launder-⋖ Δ≅Δ' env⋖Δ)
+launder-⋖ = ≅-subst _
 
 wk-⊩ : ∀{Δ : Ctx Base n} {τ} τ' {v : Val Staged τ} → Δ ⊩ v → τ' ∷ Δ ⊩ v
 wk-⊩ τ' (admit-N Δ v) = admit-N (τ' ∷ Δ) v

@@ -10,7 +10,7 @@ open import Relation.Binary.Definitions using (Reflexive; Symmetric)
 open import Relation.Binary.PropositionalEquality
 
 private variable
-  ℓ : Level
+  ℓ ℓ' : Level
   T : Set ℓ
   m n n' o : ℕ
 
@@ -41,6 +41,15 @@ launder xs refl = xs , ≅-refl
   (xs ++ ys) ++ zs ≅ xs ++ ys ++ zs
 ++-assoc-≅ [] ys zs = ≅-reflexive refl
 ++-assoc-≅ (x ∷ xs) ys zs = ≅-cons (++-assoc-≅ xs ys zs)
+
+≅-≡ : ∀ {xs : Vec T n} {ys : Vec T n} → xs ≅ ys → xs ≡ ys
+≅-≡ ≅-nil = refl
+≅-≡ (≅-cons xs≅ys) = cong _ (≅-≡ xs≅ys)
+
+≅-subst : ∀ {T : Set ℓ} {xs : Vec T n} {ys : Vec T m} →
+  (P : ∀ {len} → Vec T len → Set ℓ') → xs ≅ ys → P xs → P ys
+≅-subst P xs≅ys Pxs with ≅-len xs≅ys
+... | refl rewrite ≅-≡ xs≅ys = Pxs
 
 ++-subst-≅ₗ : ∀ {xs : Vec T n} {xs' : Vec T n'} {ys : Vec T m} {zs} →
   xs ≅ xs' → xs ++ ys ≡ zs → zs ≅ xs' ++ ys
