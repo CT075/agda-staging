@@ -40,3 +40,7 @@ launder-[]= (≅-cons xs≅ys) (there Γ[i]=t) = there (launder-[]= xs≅ys Γ[i
 data _⊆_ {T : Set ℓ} : Ctx T n → Ctx T n' → Set ℓ where
   ⊆-refl : (Γ : Ctx T n) → Γ ⊆ Γ
   ⊆-cons : ∀{Γ : Ctx T n} {Γ' : Ctx T n'} → (t : T) → Γ ⊆ Γ' → Γ ⊆ (t ∷ Γ')
+
+++-⊆ : ∀(Γ : Ctx T n) (Γ' : Ctx T n') → Γ ⊆ (Γ' ++ Γ)
+++-⊆ Γ [] = ⊆-refl Γ
+++-⊆ Γ (t ∷ Γ') = ⊆-cons t (++-⊆ Γ Γ')
