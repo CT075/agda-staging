@@ -14,7 +14,7 @@ private variable
   ℓ : Level
   T : Set ℓ
   t t' : T
-  m n n' i : ℕ
+  m n n' o i : ℕ
 
 -- We use De Bruijin levels with *reversed* contexts. That is, index 0 refers
 -- to the rightmost element of `Γ`. This is because Agda is better-behaved when
@@ -34,8 +34,7 @@ data _[_]=_ {T : Set ℓ} : Ctx T n → ℕ → T → Set ℓ where
 
 launder-[]= : ∀{Γ : Ctx T n} {Δ : Ctx T m} {i t} →
   Γ ≅ Δ → Γ [ i ]= t → Δ [ i ]= t
-launder-[]= (≅-cons xs≅ys) here rewrite ≅-len xs≅ys = here
-launder-[]= (≅-cons xs≅ys) (there Γ[i]=t) = there (launder-[]= xs≅ys Γ[i]=t)
+launder-[]= = ≅-subst _
 
 data _⊆_ {T : Set ℓ} : Ctx T n → Ctx T n' → Set ℓ where
   ⊆-refl : (Γ : Ctx T n) → Γ ⊆ Γ
@@ -44,3 +43,8 @@ data _⊆_ {T : Set ℓ} : Ctx T n → Ctx T n' → Set ℓ where
 ++-⊆ : ∀(Γ : Ctx T n) (Γ' : Ctx T n') → Γ ⊆ (Γ' ++ Γ)
 ++-⊆ Γ [] = ⊆-refl Γ
 ++-⊆ Γ (t ∷ Γ') = ⊆-cons t (++-⊆ Γ Γ')
+
+xs⊆ys⇒xs++zs⊆ys++zs : ∀{xs : Ctx T n} {ys : Ctx T m} {zs : Ctx T o} →
+  xs ⊆ ys → (xs ++ zs) ⊆ (ys ++ zs)
+xs⊆ys⇒xs++zs⊆ys++zs (⊆-refl xs) = ⊆-refl (xs ++ _)
+xs⊆ys⇒xs++zs⊆ys++zs (⊆-cons t xs⊆ys) = ⊆-cons t (xs⊆ys⇒xs++zs⊆ys++zs xs⊆ys)

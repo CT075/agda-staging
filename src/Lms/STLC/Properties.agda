@@ -189,220 +189,135 @@ evalms-fresh-grows (evalms-CC e⇓) = evalms-fresh-grows e⇓
 evalms-fresh-grows (evalms-++ e₁⇓ e₂⇓) =
   a≤b⇒a≤1+b (≤-trans (evalms-fresh-grows e₁⇓) (evalms-fresh-grows e₂⇓))
 
-evalms-block-typed :
+evalms-wf :
   ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ} {e : Tm _ τ _} {v} →
   (Δ : Ctx Base fresh) →
   env ⋖ Δ →
   env ⊢⟨ e , fresh ⟩⇓⟨[ ts , v ], fresh' ⟩ →
-  Σ[ Δ' ∈ Ctx Base (fresh' ∸ fresh) ](Δ ⊢ts ts ∈ Δ')
+  Σ[ Δ' ∈ Ctx Base (fresh' ∸ fresh) ](Δ ⊢ts ts ∈ Δ' × Δ' ++ᵥ Δ ⊩ v)
 
-evalms-admissible :
-  ∀ {Γ : Ctx Staged n} {env : Env Γ}
-    {τ e} {v : Val Staged τ} {Δ' : Ctx Base (fresh' ∸ fresh)} →
-  (Δ : Ctx Base fresh) →
-  env ⋖ Δ →
-  env ⊢⟨ e , fresh ⟩⇓⟨[ ts , v ], fresh' ⟩ →
-  Δ ⊢ts ts ∈ Δ' →
-  Δ' ++ᵥ Δ ⊩ v
-
--- A surprisingly-messy lemma for chaining two evaluations together.
+-- A lemma for handling evaluations in sequence.
 evalms-chain :
-  ∀ {Γ₁ : Ctx Staged n} {env₁ : Env Γ₁}
-    {Γ₂ : Ctx Staged n'} {env₂ : Env Γ₂}
-    {τ₁ τ₂} {e₁ : Tm _ τ₁ _} {e₂ : Tm _ τ₂ _}
-    {fresh fresh' fresh'' x₁ x₂} →
-  (Δ : Ctx Base fresh) →
-  env₁ ⋖ Δ →
-  ((Δ' : Ctx Base (fresh' ∸ fresh)) → Δ ⊢ts ts₁ ∈ Δ' → env₂ ⋖ Δ' ++ᵥ Δ) →
-  env₁ ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , x₁ ], fresh' ⟩ →
-  env₂ ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , x₂ ], fresh'' ⟩ →
-  Σ[ Δ' ∈ Ctx Base (fresh'' ∸ fresh) ]
-    (Δ ⊢ts ts₂ ++ₗ ts₁ ∈ Δ' × Δ' ++ᵥ Δ ⊩ x₁ × Δ' ++ᵥ Δ ⊩ x₂)
+  ∀ {Γ : Ctx Staged n} {env : Env Γ} {τ} {e : Tm _ τ Γ} {v}
+    (Δ : Ctx Base fresh) {Δ' : Ctx Base (fresh' ∸ fresh)} →
+  fresh ≤ fresh' →
+  Δ ⊢ts ts₁ ∈ Δ' → env ⋖ Δ' ++ᵥ Δ →
+  env ⊢⟨ e , fresh' ⟩⇓⟨[ ts₂ , v ], fresh'' ⟩ →
+  Σ[ Δout ∈ Ctx Base (fresh'' ∸ fresh) ]
+    (Δ' ⊆ Δout × Δ ⊢ts ts₂ ++ₗ ts₁ ∈ Δout × Δout ++ᵥ Δ ⊩ v)
 
-evalms-block-typed {fresh = i} Δ env⋖Δ (evalms-C _) rewrite n∸n≡0 i =
-  [] , anf-nil
-evalms-block-typed {fresh = i} Δ env⋖Δ (evalms-V _ _ _) rewrite n∸n≡0 i =
-  [] , anf-nil
-evalms-block-typed {fresh = i} Δ env⋖Δ evalms-λ rewrite n∸n≡0 i =
-  [] , anf-nil
--- XXX: This one basically needs us to call `evalms-chain` twice, but we can't
--- because we
-evalms-block-typed
-    Δ env⋖Δ
-    (evalms-$
-      {fresh = i} {fresh'' = i'} {fresh''' = i''}
-      {τ₁ = τ₁}
-      {ts₁ = ts₁} {ts₂ = ts₂} {ts₃ = ts₃}
-      {env' = env'}
-      {x = x} {e' = body}
-      e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) = cont Δ'++Δ⊩f
-  where
-    ext-env = λ Δ' Δ⊢ts₁∈Δ' → extend-⋖ env⋖Δ (++-⊆ Δ Δ')
-    IH[f[x]] = evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,f] e₂⇓[ts₂,x]
-
-    Δ' : Ctx Base (i' ∸ i)
-    Δ' = proj₁ IH[f[x]]
-    Δ⊢ts₂++ts₁∈Δ' = proj₁ (proj₂ IH[f[x]])
-    Δ'++Δ⊩f = proj₁ (proj₂ (proj₂ IH[f[x]]))
-    Δ'++Δ⊩x = proj₂ (proj₂ (proj₂ IH[f[x]]))
-
-    i≤i' : i ≤ i'
-    i≤i' = ≤-trans (evalms-fresh-grows e₁⇓[ts₁,f]) (evalms-fresh-grows e₂⇓[ts₂,x])
-
-    Δs,Δ'++Δ≅Δs = Vec.launder (Δ' ++ᵥ Δ) (m∸n+n≡m i≤i')
-
-    Δs : Ctx Base i'
-    Δs = proj₁ Δs,Δ'++Δ≅Δs
-    Δ'++Δ≅Δs = proj₂ Δs,Δ'++Δ≅Δs
-
-    Δs⊩x : Δs ⊩ x
-    Δs⊩x = ≅-subst (_⊩ x) Δ'++Δ≅Δs Δ'++Δ⊩x
-
-    i'≤i'' : i' ≤ i''
-    i'≤i'' = evalms-fresh-grows body⇓[ts₃,v]
-
-    cont : Δ' ++ᵥ Δ ⊩ (Closure env' body) →
-      Σ[ Δ'' ∈ Ctx Base (i'' ∸ i) ] (Δ ⊢ts (ts₃ ++ₗ ts₂ ++ₗ ts₁) ∈ Δ'')
-    cont (admit-=> body env'⋖Δ'++Δ) = Δout , Δ⊢ts₃++ts₂++ts₁∈Δout
-      where
-        IHbody =
-          evalms-block-typed
-            Δs
-            (cons-valid Δs⊩x (≅-subst (_ ⋖_) Δ'++Δ≅Δs env'⋖Δ'++Δ))
-            body⇓[ts₃,v]
-
-        Δbody : Ctx Base (i'' ∸ i')
-        Δbody = proj₁ IHbody
-
-        Δs⊢ts₃∈Δbody : Δs ⊢ts ts₃ ∈ Δbody
-        Δs⊢ts₃∈Δbody = proj₂ IHbody
-
-        Δ'++Δ⊢ts₃∈Δbody : Δ' ++ᵥ Δ ⊢ts ts₃ ∈ Δbody
-        Δ'++Δ⊢ts₃∈Δbody =
-          ≅-subst (_⊢ts _ ∈ Δbody) (≅-symmetric Δ'++Δ≅Δs) Δs⊢ts₃∈Δbody
-
-        Δ⊢ts₃++ts₂++ts₁∈Δbody++Δ' : Δ ⊢ts ts₃ ++ₗ ts₂ ++ₗ ts₁ ∈ Δbody ++ᵥ Δ'
-        Δ⊢ts₃++ts₂++ts₁∈Δbody++Δ' =
-          block-typ-join
-            {Δ = Δ} {Δ' = Δ'} {Δ'' = Δbody}
-            Δ⊢ts₂++ts₁∈Δ'
-            Δ'++Δ⊢ts₃∈Δbody
-
-        Δout,Δbody++Δ'≅Δout = Vec.launder (Δbody ++ᵥ Δ') (a∸b+b∸c≡a∸c i'≤i'' i≤i')
-
-        Δout : Ctx Base (i'' ∸ i)
-        Δout = proj₁ Δout,Δbody++Δ'≅Δout
-        Δbody++Δ'≅Δout = proj₂ Δout,Δbody++Δ'≅Δout
-
-        Δ⊢ts₃++ts₂++ts₁∈Δout : Δ ⊢ts ts₃ ++ₗ ts₂ ++ₗ ts₁ ∈ Δout
-        Δ⊢ts₃++ts₂++ts₁∈Δout =
-          ≅-subst (Δ ⊢ts ts₃ ++ₗ ts₂ ++ₗ ts₁ ∈_)
-            Δbody++Δ'≅Δout
-            Δ⊢ts₃++ts₂++ts₁∈Δbody++Δ'
-
-evalms-block-typed {env = env}
-    Δ env⋖Δ
-    (evalms-let
-      {fresh = i} {ts₁ = ts₁} {fresh' = i'} {τ₁ = τ} {e₁ = e₁} {x = x}
-      e₁⇓[ts₁,x] e₂⇓[ts₂,v]) =
-  let Δ' , Δ⊢ts₂++ts₂∈Δ' , _ , _ =
-        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,x] e₂⇓[ts₂,v]
-   in Δ' , Δ⊢ts₂++ts₂∈Δ'
-  where
-    ext-env : (Δ' : Ctx Base (i' ∸ i)) → Δ ⊢ts ts₁ ∈ Δ' → cons x env ⋖ Δ' ++ᵥ Δ
-    ext-env Δ' Δ⊢ts₁∈Δ' =
-      cons-valid
-        (evalms-admissible Δ env⋖Δ e₁⇓[ts₁,x] Δ⊢ts₁∈Δ')
-        (extend-⋖ env⋖Δ (++-⊆ _ Δ'))
-evalms-block-typed Δ env⋖Δ (evalms-+ refl e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) =
-  let Δ' , Δ⊢ts₂++ts₁∈Δ' , _ , _ =
-        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]
-   in Δ' , Δ⊢ts₂++ts₁∈Δ'
-  where
-    ext-env = λ Δ' Δ⊢ts₁∈Δ' → extend-⋖ env⋖Δ (++-⊆ Δ Δ')
-evalms-block-typed Δ env⋖Δ (evalms-CC e) = evalms-block-typed Δ env⋖Δ e
-evalms-block-typed Δ env⋖Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) = {!!}
-
-evalms-admissible Δ env⋖Δ (evalms-C x) Δ⊢ts∈Δ' = admit-N _ x
-evalms-admissible Δ env⋖Δ (evalms-V _ _ env[i]=v) _ =
+evalms-wf {fresh = i} Δ env⋖Δ (evalms-C x) rewrite n∸n≡0 i =
+  [] , anf-nil , admit-N _ x
+evalms-wf {fresh = i} Δ env⋖Δ (evalms-V _ _ env[i]=v) rewrite n∸n≡0 i =
   -- This `extend` is a no-op, because `Δ' : Ctx Base (fresh ∸ fresh)` is
   -- always empty. Getting Agda to realize this is quite verbose, so it's
   -- simpler to just write it this way.
-  ⋖-lookup (extend-⋖ env⋖Δ (++-⊆ _ _)) env[i]=v
-evalms-admissible Δ env⋖Δ evalms-λ Δ⊢ts∈Δ' =
-  admit-=> _ (extend-⋖ env⋖Δ (++-⊆ _ _))
-evalms-admissible Δ env⋖Δ (evalms-$ e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) Δ⊢ts∈Δ' = {! !}
-evalms-admissible Δ env⋖Δ (evalms-let e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) Δ⊢ts∈Δ' = {! !}
-evalms-admissible Δ env⋖Δ (evalms-+ refl _ _) Δ⊢ts∈Δ' = admit-N _ _
-evalms-admissible Δ env⋖Δ (evalms-CC _) Δ⊢ts∈Δ' = admit-Code (anf-c _)
-evalms-admissible Δ env⋖Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) Δ⊢ts∈Δ' = {! !}
-
--- This lemma is effectively "cite the IH twice". The reason it's so complicated
--- is because we need to do a lot of vector length munging. We can't use regular
--- rewrites because values like `(i' ∸ i) + i` are not syntactically
--- equal to `i'' ∸ i`, which prevents us from even uttering something like
--- `evalms-block-typed (Δ' ++ᵥ Δ) _ e₂⇓[ts₂,x₂]`.
-evalms-chain
-    {ts₁ = ts₁} {ts₂ = ts₂} {env₂ = env₂}
-    {fresh = i} {fresh' = i'} {fresh'' = i''}
-    {x₁ = x₁} {x₂ = x₂}
-    Δ env₁⋖Δ mk-env₂-lemma e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂] =
-  Δout , proof , Δout++Δ⊩x₁ , Δout++Δ⊩x₂
+  [] , anf-nil , ⋖-lookup (extend-⋖ env⋖Δ (++-⊆ _ _)) env[i]=v
+evalms-wf {fresh = i} Δ env⋖Δ evalms-λ rewrite n∸n≡0 i =
+  [] , anf-nil , admit-=> _ (extend-⋖ env⋖Δ (++-⊆ _ _))
+evalms-wf Δ env⋖Δ
+    (evalms-$
+      {fresh = fresh} {fresh'' = fresh'} {fresh''' = fresh''}
+      {ts₁ = ts₁} {ts₂ = ts₂} {ts₃ = ts₃}
+      {env' = env'} {e' = body} {v = v}
+      e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) = cont Δ'++Δ⊩f
   where
-    IH₁ = evalms-block-typed Δ env₁⋖Δ e₁⇓[ts₁,x₁]
-    i≤i' = evalms-fresh-grows e₁⇓[ts₁,x₁]
+    IH₁ = evalms-wf Δ env⋖Δ e₁⇓[ts₁,f]
     Δ' = proj₁ IH₁
-    Δ⊢ts₁∈Δ' : Δ ⊢ts ts₁ ∈ Δ'
-    Δ⊢ts₁∈Δ' = proj₂ IH₁
-    Δ'++Δ⊩x₁ = evalms-admissible Δ env₁⋖Δ e₁⇓[ts₁,x₁] Δ⊢ts₁∈Δ'
+    Δ⊢ts₁∈Δ' = proj₁ (proj₂ IH₁)
+    Δ'++Δ⊩f = proj₂ (proj₂ IH₁)
+    fresh≤fresh' = evalms-fresh-grows e₁⇓[ts₁,f]
 
-    Δs,Δ'++Δ≅Δs = Vec.launder (Δ' ++ᵥ Δ) (m∸n+n≡m i≤i')
+    IH₂ = evalms-chain Δ fresh≤fresh'
+            Δ⊢ts₁∈Δ' (extend-⋖ env⋖Δ (++-⊆ _ Δ'))
+            e₂⇓[ts₂,x]
+    Δ'' = proj₁ IH₂
+    Δ'⊆Δ'' = proj₁ (proj₂ IH₂)
+    Δ⊢ts₂++ts₁∈Δ'' = proj₁ (proj₂ (proj₂ IH₂))
+    Δ''++Δ⊩x = proj₂ (proj₂ (proj₂ IH₂))
+    fresh≤fresh'' = ≤-trans fresh≤fresh' (evalms-fresh-grows e₂⇓[ts₂,x])
 
-    Δs : Ctx Base i'
+    cont : Δ' ++ᵥ Δ ⊩ (Closure env' body) →
+      Σ[ Δ'' ∈ Ctx Base (fresh'' ∸ fresh) ]
+        (Δ ⊢ts (ts₃ ++ₗ ts₂ ++ₗ ts₁) ∈ Δ'' × Δ'' ++ᵥ Δ ⊩ v)
+    cont (admit-=> body env'⋖Δ'++Δ) =
+      let Δout , _ , ts-typed , v-typed = IH₃
+       in Δout , ts-typed , v-typed
+      where
+        IH₃ = evalms-chain
+                Δ fresh≤fresh'' Δ⊢ts₂++ts₁∈Δ''
+                (cons-valid
+                  Δ''++Δ⊩x
+                  (extend-⋖ env'⋖Δ'++Δ (xs⊆ys⇒xs++zs⊆ys++zs Δ'⊆Δ'')))
+                body⇓[ts₃,v]
+evalms-wf Δ env⋖Δ (evalms-let e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) =
+  let Δout , _ , ts-typed , v-typed = IH₂
+   in Δout , ts-typed , v-typed
+  where
+    IH₁ = evalms-wf Δ env⋖Δ e₁⇓[ts₁,x₁]
+    Δ' = proj₁ IH₁
+    Δ⊢ts₁∈Δ' = proj₁ (proj₂ IH₁)
+    Δ'++Δ⊩x₁ = proj₂ (proj₂ IH₁)
+    fresh≤fresh' = evalms-fresh-grows e₁⇓[ts₁,x₁]
+
+    IH₂ = evalms-chain Δ fresh≤fresh'
+            Δ⊢ts₁∈Δ' (cons-valid Δ'++Δ⊩x₁ (extend-⋖ env⋖Δ (++-⊆ _ Δ')))
+            e₂⇓[ts₂,x₂]
+evalms-wf Δ env⋖Δ (evalms-+ refl e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) =
+  let Δout , _ , ts-typed , _ = IH₂
+   in Δout , ts-typed , admit-N _ _
+  where
+    IH₁ = evalms-wf Δ env⋖Δ e₁⇓[ts₁,x₁]
+    Δ' = proj₁ IH₁
+    Δ⊢ts₁∈Δ' = proj₁ (proj₂ IH₁)
+    Δ'++Δ⊩x₁ = proj₂ (proj₂ IH₁)
+    fresh≤fresh' = evalms-fresh-grows e₁⇓[ts₁,x₁]
+
+    IH₂ = evalms-chain Δ fresh≤fresh'
+            Δ⊢ts₁∈Δ' (extend-⋖ env⋖Δ (++-⊆ _ Δ'))
+            e₂⇓[ts₂,x₂]
+evalms-wf Δ env⋖Δ (evalms-CC e⇓[ts,x]) =
+  let Δ' , Δ⊢ts∈Δ' , _ = evalms-wf Δ env⋖Δ e⇓[ts,x]
+   in Δ' , Δ⊢ts∈Δ' , admit-Code (anf-c _)
+evalms-wf Δ env⋖Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) = {! !}
+
+-- This lemma is effectively "cite the IH and then weaken". The reason it's so
+-- complicated is because we need to do a lot of vector length munging. We can't
+-- use regular rewrites because values like `(i' ∸ i) + i` are not syntactically
+-- equal to `i'' ∸ i`, which prevents us from even uttering something like
+-- `evalms-wf (Δ' ++ᵥ Δ) _ e₂⇓[ts₂,x₂]`.
+evalms-chain {fresh = fresh} {fresh' = fresh'} {ts₁} {ts₂}
+    {fresh'' = fresh''} {env = env} {v = v}
+    Δ {Δ' = Δ'} fresh≤fresh' Δ⊢ts₁∈Δ' env⋖Δ'++Δ e⇓[ts₂,v] =
+  Δout , Δ'⊆Δout , proof , Δout++Δ⊩v
+  where
+    Δs,Δ'++Δ≅Δs = Vec.launder (Δ' ++ᵥ Δ) (m∸n+n≡m fresh≤fresh')
+
+    Δs : Ctx Base fresh'
     Δs = proj₁ Δs,Δ'++Δ≅Δs
-
-    Δ'++Δ≅Δs : Δ' ++ᵥ Δ ≅ Δs
     Δ'++Δ≅Δs = proj₂ Δs,Δ'++Δ≅Δs
 
-    env₂⋖Δ'++Δ : env₂ ⋖ Δ' ++ᵥ Δ
-    env₂⋖Δ'++Δ = mk-env₂-lemma Δ' Δ⊢ts₁∈Δ'
+    env⋖Δs = ≅-subst (env ⋖_) Δ'++Δ≅Δs env⋖Δ'++Δ
 
-    env₂⋖Δs : env₂ ⋖ Δs
-    env₂⋖Δs = launder-⋖ Δ'++Δ≅Δs env₂⋖Δ'++Δ
+    IH = evalms-wf Δs env⋖Δs e⇓[ts₂,v]
+    fresh'≤fresh'' = evalms-fresh-grows e⇓[ts₂,v]
+    Δ'' = proj₁ IH
+    Δs⊢ts₂∈Δ'' = proj₁ (proj₂ IH)
+    Δ''++Δs⊩v = proj₂ (proj₂ IH)
 
-    IH₂ = evalms-block-typed Δs env₂⋖Δs e₂⇓[ts₂,x₂]
-    i'≤i'' = evalms-fresh-grows e₂⇓[ts₂,x₂]
-    Δ'' = proj₁ IH₂
-    Δs⊢ts₂∈Δ'' : Δs ⊢ts ts₂ ∈ Δ''
-    Δs⊢ts₂∈Δ'' = proj₂ IH₂
-    Δ''++Δs⊩x₂ = evalms-admissible Δs env₂⋖Δs e₂⇓[ts₂,x₂] Δs⊢ts₂∈Δ''
+    Δout,Δ''++Δ'≅Δout =
+      Vec.launder (Δ'' ++ᵥ Δ') (a∸b+b∸c≡a∸c fresh'≤fresh'' fresh≤fresh')
 
-    Δ'++Δ⊢ts₂∈Δ'' : Δ' ++ᵥ Δ ⊢ts ts₂ ∈ Δ''
-    Δ'++Δ⊢ts₂∈Δ'' = block-launder-ctx (≅-symmetric Δ'++Δ≅Δs) Δs⊢ts₂∈Δ''
-
-    Δout,Δ''++Δ'≅Δout = Vec.launder (Δ'' ++ᵥ Δ') (a∸b+b∸c≡a∸c i'≤i'' i≤i')
-
-    Δout : Ctx Base (i'' ∸ i)
     Δout = proj₁ Δout,Δ''++Δ'≅Δout
-
-    Δ''++Δ'≅Δout : Δ'' ++ᵥ Δ' ≅ Δout
     Δ''++Δ'≅Δout = proj₂ Δout,Δ''++Δ'≅Δout
-
-    Δ⊢ts₂++ts₂∈Δ''++Δ' : Δ ⊢ts ts₂ ++ₗ ts₁ ∈ Δ'' ++ᵥ Δ'
+    Δ'++Δ⊢ts₂∈Δ'' = block-launder-ctx (≅-symmetric Δ'++Δ≅Δs) Δs⊢ts₂∈Δ''
     Δ⊢ts₂++ts₂∈Δ''++Δ' = block-typ-join Δ⊢ts₁∈Δ' Δ'++Δ⊢ts₂∈Δ''
+
+    Δ'⊆Δout : Δ' ⊆ Δout
+    Δ'⊆Δout = ≅-subst (Δ' ⊆_) Δ''++Δ'≅Δout (++-⊆ Δ' Δ'')
 
     proof : Δ ⊢ts ts₂ ++ₗ ts₁ ∈ Δout
     proof = block-launder-out Δ''++Δ'≅Δout Δ⊢ts₂++ts₂∈Δ''++Δ'
-
-    Δ''++[Δ'++Δ]⊩x₁ : Δ'' ++ᵥ Δ' ++ᵥ Δ ⊩ x₁
-    Δ''++[Δ'++Δ]⊩x₁ = extend-⊩ Δ'++Δ⊩x₁ (++-⊆ _ Δ'')
-
-    [Δ''++Δ']++Δ⊩x₁ : (Δ'' ++ᵥ Δ') ++ᵥ Δ ⊩ x₁
-    [Δ''++Δ']++Δ⊩x₁ =
-      ≅-subst (_⊩ x₁) (≅-symmetric (≅-++-assoc Δ'' Δ' Δ)) Δ''++[Δ'++Δ]⊩x₁
-
-    Δout++Δ⊩x₁ : Δout ++ᵥ Δ ⊩ x₁
-    Δout++Δ⊩x₁ = ≅-subst (λ d → (d ++ᵥ Δ ⊩ x₁)) Δ''++Δ'≅Δout [Δ''++Δ']++Δ⊩x₁
 
     Δ''++Δs≅Δout++Δ : Δ'' ++ᵥ Δs ≅ Δout ++ᵥ Δ
     Δ''++Δs≅Δout++Δ = begin
@@ -413,5 +328,5 @@ evalms-chain
       where
         open ≅-Reasoning
 
-    Δout++Δ⊩x₂ : Δout ++ᵥ Δ ⊩ x₂
-    Δout++Δ⊩x₂ = ≅-subst (_⊩ x₂) Δ''++Δs≅Δout++Δ Δ''++Δs⊩x₂
+    Δout++Δ⊩v : Δout ++ᵥ Δ ⊩ v
+    Δout++Δ⊩v = ≅-subst (_⊩ v) Δ''++Δs≅Δout++Δ Δ''++Δs⊩v
