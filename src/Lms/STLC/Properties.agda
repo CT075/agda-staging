@@ -237,13 +237,14 @@ evalms-block-typed {env = env}
       {fresh = i} {ts₁ = ts₁} {fresh' = i'} {τ₁ = τ} {e₁ = e₁} {x = x}
       e₁⇓[ts₁,x] e₂⇓[ts₂,v]) =
   let Δ' , Δ⊢ts₂++ts₂∈Δ' , _ , _ =
-        evalms-chain Δ env⋖Δ (ext-env e₁⇓[ts₁,x]) e₁⇓[ts₁,x] e₂⇓[ts₂,v]
+        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,x] e₂⇓[ts₂,v]
    in Δ' , Δ⊢ts₂++ts₂∈Δ'
   where
-    ext-env : {x : Val Staged τ} → env ⊢⟨ e₁ , i ⟩⇓⟨[ ts₁ , x ], i' ⟩ →
-      (Δ' : Ctx Base (i' ∸ i)) → Δ ⊢ts ts₁ ∈ Δ' → cons x env ⋖ Δ' ++ᵥ Δ
-    ext-env e₁⇓x Δ' Δ⊢ts₁∈Δ' =
-      cons-valid (evalms-admissible Δ env⋖Δ e₁⇓x Δ⊢ts₁∈Δ') (extend-⋖ env⋖Δ (++-⊆ _ Δ'))
+    ext-env : (Δ' : Ctx Base (i' ∸ i)) → Δ ⊢ts ts₁ ∈ Δ' → cons x env ⋖ Δ' ++ᵥ Δ
+    ext-env Δ' Δ⊢ts₁∈Δ' =
+      cons-valid
+        (evalms-admissible Δ env⋖Δ e₁⇓[ts₁,x] Δ⊢ts₁∈Δ')
+        (extend-⋖ env⋖Δ (++-⊆ _ Δ'))
 evalms-block-typed Δ env⋖Δ (evalms-+ refl e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) =
   let Δ' , Δ⊢ts₂++ts₁∈Δ' , _ , _ =
         evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]
