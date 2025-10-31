@@ -257,29 +257,18 @@ evalms-admissible Δ env⋖Δ (evalms-+ refl _ _) Δ⊢ts∈Δ' = admit-N _ _
 evalms-admissible Δ env⋖Δ (evalms-CC _) Δ⊢ts∈Δ' = admit-Code (anf-c _)
 evalms-admissible Δ env⋖Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) Δ⊢ts∈Δ' = {! !}
 
--- The reason this is so complicated despite basically being "cite the
--- inductive hypothesis twice" is due to Agda not pushing equalities through
--- "two levels" of types. If we have `Δ₁ : Ctx Base n₁` and `Δ₂ : Ctx Base n₂`
--- where `Δ₁` and `Δ₂` appear in the *type*, it's difficult to even state the
--- equality `Δ₁ ≡ Δ₂` (e.g. for a rewrite) because `n₁` and `n₂` aren't
--- syntactically the same, even if we know that `n₁ ≡ n₂`.
---
--- Typically, this is resolved via chained `with`-clauses, where we first match
--- on `n₁ ≡ n₂` so that the type `Δ₁ ≡ Δ₂` can be formed, then further matching
--- on that evidence to allow for unification. However, I tend to find that
--- style frustrating to actually write due to the error messages rapidly
--- becoming unreadable (especially in this proof that requires unwrapping a
--- bunch of dependent sums).
---
--- Instead, we manipulate the "length-agnostic" equality `_≅_` to get terms of
--- the expected (syntactic) type.
+-- This lemma is effectively "cite the IH twice". The reason it's so complicated
+-- is because we need to do a lot of vector length munging. We can't use regular
+-- rewrites because values like `(i' ∸ i) + i` are not syntactically
+-- equal to `i'' ∸ i`, which prevents us from even uttering something like
+-- `evalms-block-typed (Δ' ++ᵥ Δ) _ e₂⇓[ts₂,x₂]`.
 evalms-chain
     {ts₁ = ts₁} {ts₂ = ts₂}
     {env₂ = env₂}
     {fresh = i} {fresh' = i'} {fresh'' = i''}
     {x₁ = x₁} {x₂ = x₂}
     Δ env₁⋖Δ mk-env₂-lemma e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂] =
-  Δout , proof , Δout++Δ⊩x₁ , {!!}
+  Δout , proof , Δout++Δ⊩x₁ , Δout++Δ⊩x₂
   where
     IH₁ = evalms-block-typed Δ env₁⋖Δ e₁⇓[ts₁,x₁]
     i≤i' = evalms-fresh-grows e₁⇓[ts₁,x₁]
@@ -345,3 +334,6 @@ evalms-chain
       ∎
       where
         open ≅-Reasoning
+
+    Δout++Δ⊩x₂ : Δout ++ᵥ Δ ⊩ x₂
+    Δout++Δ⊩x₂ = ≅-subst (_⊩ x₂) Δ''++Δs≅Δout++Δ Δ''++Δs⊩x₂
