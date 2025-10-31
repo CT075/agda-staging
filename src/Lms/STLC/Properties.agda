@@ -101,7 +101,7 @@ data _⊩_ where
   admit-=> :
     ∀ {Δ : Ctx Base n} {τ₁ τ₂}
       {Γ : Ctx Staged m} {env : Env Γ} (body : Tm _ τ₂ (τ₁ ∷ Γ)) →
-    Σ₂[ inner ∈ ℕ , Δ' ∈ Ctx Base inner ](env ⋖ Δ') →
+    env ⋖ Δ →
     Δ ⊩ Closure env body
   -- Code snippets should be well-typed against Δ
   admit-Code : ∀{Δ : Ctx Base n} {v τ} → Δ ⊢v v ∈ τ → Δ ⊩ Code τ v
@@ -127,7 +127,7 @@ data _⋖_ where
     {Δ : Ctx Base m}
     {i τ₁ τ₂} {body : Tm _ τ₂ (τ₁ ∷ Γ')} →
   env ⋖ Δ → env [ i ]↦ Closure env' body ∈ (τ₁ => τ₂) →
-  (Σ₂[ m' ∈ ℕ , Δ' ∈ Ctx Base m' ](env' ⋖ Δ'))
+  env' ⋖ Δ
 ⋖-lookup-closure (cons-valid (admit-=> body result) env⋖Δ) here = result
 ⋖-lookup-closure (cons-valid (admit-N _ _) env⋖Δ) (there env[i]=v) =
   ⋖-lookup-closure env⋖Δ env[i]=v
@@ -144,10 +144,13 @@ launder-⋖ :
 launder-⋖ = ≅-subst _
 
 wk-⊩ : ∀{Δ : Ctx Base n} {τ} τ' {v : Val Staged τ} → Δ ⊩ v → τ' ∷ Δ ⊩ v
+wk-⋖ : ∀{Γ : Ctx Staged n} {env : Env Γ} {Δ : Ctx Base m} τ →
+  env ⋖ Δ → env ⋖ τ ∷ Δ
+
 wk-⊩ τ' (admit-N Δ v) = admit-N (τ' ∷ Δ) v
 -- The added var τ is definitely not closed-over, so we don't need to traverse
 -- inside the inner proof.
-wk-⊩ τ' (admit-=> body info) = admit-=> body info
+wk-⊩ τ' (admit-=> body env⋖Δ) = admit-=> body (wk-⋖ τ' env⋖Δ)
 wk-⊩ τ' (admit-Code Δ⊢v∈τ) = admit-Code (vl-typ-wk τ' Δ⊢v∈τ)
 
 extend-⊩ :
@@ -157,8 +160,6 @@ extend-⊩ :
 extend-⊩ Δ⊩v (⊆-refl Δ) = Δ⊩v
 extend-⊩ env⊩Δ (⊆-cons τ Δ⊆Δ') = wk-⊩ τ (extend-⊩ env⊩Δ Δ⊆Δ')
 
-wk-⋖ : ∀{Γ : Ctx Staged n} {env : Env Γ} {Δ : Ctx Base m} τ →
-  env ⋖ Δ → env ⋖ τ ∷ Δ
 wk-⋖ τ (nil-valid Δ) = nil-valid (τ ∷ Δ)
 wk-⋖ τ (cons-valid Δ⊩v env⋖Δ) = cons-valid (wk-⊩ τ Δ⊩v) (wk-⋖ τ env⋖Δ)
 
@@ -224,7 +225,12 @@ evalms-block-typed {fresh = i} Δ env⋖Δ (evalms-V _ _ _) rewrite n∸n≡0 i 
   [] , anf-nil
 evalms-block-typed {fresh = i} Δ env⋖Δ evalms-λ rewrite n∸n≡0 i =
   [] , anf-nil
-evalms-block-typed Δ env⋖Δ (evalms-$ e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) = {! !}
+evalms-block-typed Δ env⋖Δ (evalms-$ e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) =
+  let Δ' , Δ⊢ts₂++ts₁∈Δ' , Δ'++Δ⊩f , Δ'++Δ⊩x =
+        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,f] e₂⇓[ts₂,x]
+   in {!!}
+  where
+    ext-env = λ Δ' Δ⊢ts₁∈Δ' → extend-⋖ env⋖Δ (++-⊆ Δ Δ')
 evalms-block-typed {env = env}
     Δ env⋖Δ
     (evalms-let
@@ -238,9 +244,9 @@ evalms-block-typed {env = env}
       (Δ' : Ctx Base (i' ∸ i)) → Δ ⊢ts ts₁ ∈ Δ' → cons x env ⋖ Δ' ++ᵥ Δ
     ext-env e₁⇓x Δ' Δ⊢ts₁∈Δ' =
       cons-valid (evalms-admissible Δ env⋖Δ e₁⇓x Δ⊢ts₁∈Δ') (extend-⋖ env⋖Δ (++-⊆ _ Δ'))
-evalms-block-typed Δ env⋖Δ (evalms-+ refl e₁⇓[ts₁,x] e₂⇓[ts₂,v]) =
+evalms-block-typed Δ env⋖Δ (evalms-+ refl e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) =
   let Δ' , Δ⊢ts₂++ts₁∈Δ' , _ , _ =
-        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,x] e₂⇓[ts₂,v]
+        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]
    in Δ' , Δ⊢ts₂++ts₁∈Δ'
   where
     ext-env = λ Δ' Δ⊢ts₁∈Δ' → extend-⋖ env⋖Δ (++-⊆ Δ Δ')
@@ -249,8 +255,12 @@ evalms-block-typed Δ env⋖Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂
 
 evalms-admissible Δ env⋖Δ (evalms-C x) Δ⊢ts∈Δ' = admit-N _ x
 evalms-admissible Δ env⋖Δ (evalms-V _ _ env[i]=v) _ =
+  -- This `extend` is a no-op, because `Δ' : Ctx Base (fresh ∸ fresh)` is
+  -- always empty. Getting Agda to realize this is quite verbose, so it's
+  -- simpler to just write it this way.
   ⋖-lookup (extend-⋖ env⋖Δ (++-⊆ _ _)) env[i]=v
-evalms-admissible Δ env⋖Δ evalms-λ Δ⊢ts∈Δ' = admit-=> _ (_ , Δ , env⋖Δ)
+evalms-admissible Δ env⋖Δ evalms-λ Δ⊢ts∈Δ' =
+  admit-=> _ (extend-⋖ env⋖Δ (++-⊆ _ _))
 evalms-admissible Δ env⋖Δ (evalms-$ e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) Δ⊢ts∈Δ' = {! !}
 evalms-admissible Δ env⋖Δ (evalms-let e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]) Δ⊢ts∈Δ' = {! !}
 evalms-admissible Δ env⋖Δ (evalms-+ refl _ _) Δ⊢ts∈Δ' = admit-N _ _
@@ -263,8 +273,7 @@ evalms-admissible Δ env⋖Δ (evalms-++ e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂]
 -- equal to `i'' ∸ i`, which prevents us from even uttering something like
 -- `evalms-block-typed (Δ' ++ᵥ Δ) _ e₂⇓[ts₂,x₂]`.
 evalms-chain
-    {ts₁ = ts₁} {ts₂ = ts₂}
-    {env₂ = env₂}
+    {ts₁ = ts₁} {ts₂ = ts₂} {env₂ = env₂}
     {fresh = i} {fresh' = i'} {fresh'' = i''}
     {x₁ = x₁} {x₂ = x₂}
     Δ env₁⋖Δ mk-env₂-lemma e₁⇓[ts₁,x₁] e₂⇓[ts₂,x₂] =
@@ -330,8 +339,7 @@ evalms-chain
       Δ'' ++ᵥ Δs ≅⟨ ≅-cong (Δ'' ++ᵥ_) (≅-symmetric Δ'++Δ≅Δs) ⟩
       Δ'' ++ᵥ (Δ' ++ᵥ Δ) ≅⟨ ≅-symmetric (≅-++-assoc Δ'' Δ' Δ) ⟩
       (Δ'' ++ᵥ Δ') ++ᵥ Δ ≅⟨ ≅-cong (_++ᵥ Δ) Δ''++Δ'≅Δout ⟩
-      Δout ++ᵥ Δ
-      ∎
+      Δout ++ᵥ Δ ∎
       where
         open ≅-Reasoning
 

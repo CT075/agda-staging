@@ -12,8 +12,7 @@ a∸b+b∸c≡a∸c {a} {b} {c} b≤a c≤b = begin
   (a ∸ b) + (b ∸ c) ≡⟨ sym (+-∸-assoc _ c≤b) ⟩
   ((a ∸ b) + b) ∸ c ≡⟨ cong (_∸ c) (sym (+-∸-comm b b≤a)) ⟩
   ((a + b) ∸ b) ∸ c ≡⟨ cong (_∸ c) (m+n∸n≡m a b) ⟩
-  a ∸ c
-  ∎
+  a ∸ c ∎
   where
     open ≡-Reasoning
 
