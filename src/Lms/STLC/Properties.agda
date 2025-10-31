@@ -225,12 +225,81 @@ evalms-block-typed {fresh = i} Δ env⋖Δ (evalms-V _ _ _) rewrite n∸n≡0 i 
   [] , anf-nil
 evalms-block-typed {fresh = i} Δ env⋖Δ evalms-λ rewrite n∸n≡0 i =
   [] , anf-nil
-evalms-block-typed Δ env⋖Δ (evalms-$ e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) =
-  let Δ' , Δ⊢ts₂++ts₁∈Δ' , Δ'++Δ⊩f , Δ'++Δ⊩x =
-        evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,f] e₂⇓[ts₂,x]
-   in {!!}
+-- XXX: This one basically needs us to call `evalms-chain` twice, but we can't
+-- because we
+evalms-block-typed
+    Δ env⋖Δ
+    (evalms-$
+      {fresh = i} {fresh'' = i'} {fresh''' = i''}
+      {τ₁ = τ₁}
+      {ts₁ = ts₁} {ts₂ = ts₂} {ts₃ = ts₃}
+      {env' = env'}
+      {x = x} {e' = body}
+      e₁⇓[ts₁,f] e₂⇓[ts₂,x] body⇓[ts₃,v]) = cont Δ'++Δ⊩f
   where
     ext-env = λ Δ' Δ⊢ts₁∈Δ' → extend-⋖ env⋖Δ (++-⊆ Δ Δ')
+    IH[f[x]] = evalms-chain Δ env⋖Δ ext-env e₁⇓[ts₁,f] e₂⇓[ts₂,x]
+
+    Δ' : Ctx Base (i' ∸ i)
+    Δ' = proj₁ IH[f[x]]
+    Δ⊢ts₂++ts₁∈Δ' = proj₁ (proj₂ IH[f[x]])
+    Δ'++Δ⊩f = proj₁ (proj₂ (proj₂ IH[f[x]]))
+    Δ'++Δ⊩x = proj₂ (proj₂ (proj₂ IH[f[x]]))
+
+    i≤i' : i ≤ i'
+    i≤i' = ≤-trans (evalms-fresh-grows e₁⇓[ts₁,f]) (evalms-fresh-grows e₂⇓[ts₂,x])
+
+    Δs,Δ'++Δ≅Δs = Vec.launder (Δ' ++ᵥ Δ) (m∸n+n≡m i≤i')
+
+    Δs : Ctx Base i'
+    Δs = proj₁ Δs,Δ'++Δ≅Δs
+    Δ'++Δ≅Δs = proj₂ Δs,Δ'++Δ≅Δs
+
+    Δs⊩x : Δs ⊩ x
+    Δs⊩x = ≅-subst (_⊩ x) Δ'++Δ≅Δs Δ'++Δ⊩x
+
+    i'≤i'' : i' ≤ i''
+    i'≤i'' = evalms-fresh-grows body⇓[ts₃,v]
+
+    cont : Δ' ++ᵥ Δ ⊩ (Closure env' body) →
+      Σ[ Δ'' ∈ Ctx Base (i'' ∸ i) ] (Δ ⊢ts (ts₃ ++ₗ ts₂ ++ₗ ts₁) ∈ Δ'')
+    cont (admit-=> body env'⋖Δ'++Δ) = Δout , Δ⊢ts₃++ts₂++ts₁∈Δout
+      where
+        IHbody =
+          evalms-block-typed
+            Δs
+            (cons-valid Δs⊩x (≅-subst (_ ⋖_) Δ'++Δ≅Δs env'⋖Δ'++Δ))
+            body⇓[ts₃,v]
+
+        Δbody : Ctx Base (i'' ∸ i')
+        Δbody = proj₁ IHbody
+
+        Δs⊢ts₃∈Δbody : Δs ⊢ts ts₃ ∈ Δbody
+        Δs⊢ts₃∈Δbody = proj₂ IHbody
+
+        Δ'++Δ⊢ts₃∈Δbody : Δ' ++ᵥ Δ ⊢ts ts₃ ∈ Δbody
+        Δ'++Δ⊢ts₃∈Δbody =
+          ≅-subst (_⊢ts _ ∈ Δbody) (≅-symmetric Δ'++Δ≅Δs) Δs⊢ts₃∈Δbody
+
+        Δ⊢ts₃++ts₂++ts₁∈Δbody++Δ' : Δ ⊢ts ts₃ ++ₗ ts₂ ++ₗ ts₁ ∈ Δbody ++ᵥ Δ'
+        Δ⊢ts₃++ts₂++ts₁∈Δbody++Δ' =
+          block-typ-join
+            {Δ = Δ} {Δ' = Δ'} {Δ'' = Δbody}
+            Δ⊢ts₂++ts₁∈Δ'
+            Δ'++Δ⊢ts₃∈Δbody
+
+        Δout,Δbody++Δ'≅Δout = Vec.launder (Δbody ++ᵥ Δ') (a∸b+b∸c≡a∸c i'≤i'' i≤i')
+
+        Δout : Ctx Base (i'' ∸ i)
+        Δout = proj₁ Δout,Δbody++Δ'≅Δout
+        Δbody++Δ'≅Δout = proj₂ Δout,Δbody++Δ'≅Δout
+
+        Δ⊢ts₃++ts₂++ts₁∈Δout : Δ ⊢ts ts₃ ++ₗ ts₂ ++ₗ ts₁ ∈ Δout
+        Δ⊢ts₃++ts₂++ts₁∈Δout =
+          ≅-subst (Δ ⊢ts ts₃ ++ₗ ts₂ ++ₗ ts₁ ∈_)
+            Δbody++Δ'≅Δout
+            Δ⊢ts₃++ts₂++ts₁∈Δbody++Δ'
+
 evalms-block-typed {env = env}
     Δ env⋖Δ
     (evalms-let
