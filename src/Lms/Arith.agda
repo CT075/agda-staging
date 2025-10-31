@@ -1,4 +1,4 @@
-module NatRep where
+module Lms.Arith where
 
 open import Data.Unit using (⊤)
 open import Data.Empty using (⊥)
