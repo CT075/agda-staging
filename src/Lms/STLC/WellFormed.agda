@@ -29,7 +29,7 @@ open import Data.Vec.Extensions as Vec
 open import Data.Product.Extensions as Prod
 
 open import Lms.STLC.Core
-open import Lms.STLC.IR
+open import Lms.STLC.IR renaming (Expr to AnfExpr)
 open import Lms.STLC.Evaluation
 
 private variable
@@ -37,7 +37,7 @@ private variable
   w : W
   n n' n'' m m' : ℕ
   fresh fresh' fresh'' fresh''' : ℕ
-  ts ts₁ ts₂ ts₃ : List AnfTm
+  ts ts₁ ts₂ ts₃ : List AnfExpr
 
 -- All these `launder` lemmas were written before I figured out how to write
 -- `≅-subst`, and removing them makes inference messier.
@@ -345,7 +345,7 @@ evalms-wf Δ env⋖Δ
     Δout++Δ[fresh'']=N : (Δout ++ᵥ Δ)[ fresh'' ]= N
     Δout++Δ[fresh'']=N = ≅-subst (_[ fresh'' ]= N) N∷Δall≅Δout++Δ N∷Δall[fresh'']=N
 
-    Δout++Δ⊩fresh'' : Δout ++ᵥ Δ ⊩ Code N (Varₐ fresh'')
+    Δout++Δ⊩fresh'' : Δout ++ᵥ Δ ⊩ Code N (Vₐ fresh'')
     Δout++Δ⊩fresh'' = admit-Code (anf-v Δout++Δ[fresh'']=N)
 
 -- This lemma is effectively "cite the IH and then weaken". The reason it's so

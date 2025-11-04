@@ -10,7 +10,7 @@ open import Relation.Binary.PropositionalEquality using (_≡_)
 open import Data.Store as Store using (Store; cons; nil; store-lookup-syntax)
 
 open import Lms.STLC.Core
-open import Lms.STLC.IR
+open import Lms.STLC.IR as IR renaming (Expr to AnfExpr) hiding (Val)
 
 private variable
   n n' : ℕ
@@ -26,7 +26,7 @@ data Val where
   Closure : ∀{τ₁ τ₂} {Γ : Ctx w n} →
     (env : Env Γ) → Tm w τ₂ (τ₁ ∷ Γ) →
     Val w (τ₁ => τ₂)
-  Code : ∀ τ → AnfVal → Val Staged (Rep τ)
+  Code : ∀ τ → Atom → Val Staged (Rep τ)
 
 infix 4 _⊢_⇓_
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
@@ -50,7 +50,7 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
 
 private variable
   fresh fresh' fresh'' fresh''' : ℕ
-  ts ts₁ ts₂ ts₃ : List AnfTm
+  ts ts₁ ts₂ ts₃ : List AnfExpr
 
 infix 4 _⊢⟨_,_⟩⇓⟨[_,_],_⟩
 data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
@@ -59,7 +59,7 @@ data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
   -- term to evaluate + fresh var counter
   Tm Staged τ Γ → ℕ →
   -- lifted ANF terms + result + new fresh counter
-  List AnfTm → Val Staged τ → ℕ →
+  List AnfExpr → Val Staged τ → ℕ →
   Set
   where
   evalms-C : ∀ {Γ : Ctx Staged n} {env : Env Γ} x →
@@ -89,13 +89,13 @@ data _⊢⟨_,_⟩⇓⟨[_,_],_⟩ : ∀{τ} {Γ : Ctx Staged n} →
 
   evalms-CC : ∀ {Γ : Ctx Staged n} {env : Env Γ} {e x} →
     env ⊢⟨ e , fresh ⟩⇓⟨[ ts , Const x ], fresh' ⟩ →
-    env ⊢⟨ CC e , fresh ⟩⇓⟨[ ts , Code N (Constₐ x) ], fresh' ⟩
+    env ⊢⟨ CC e , fresh ⟩⇓⟨[ ts , Code N (Cₐ x) ], fresh' ⟩
   --evalms-λλ
 
   evalms-++ : ∀{Γ : Ctx Staged n} {env : Env Γ} {e₁ e₂ a₁ a₂} →
     env ⊢⟨ e₁ , fresh ⟩⇓⟨[ ts₁ , Code N a₁ ], fresh' ⟩ →
     env ⊢⟨ e₂ , fresh' ⟩⇓⟨[ ts₂ , Code N a₂ ], fresh'' ⟩ →
     env ⊢⟨ e₁ ++ e₂ , fresh ⟩⇓⟨[
-        (a₁ +ₐ a₂) ∷ₗ ts₂ ++ₗ ts₁ , Code N (Varₐ fresh'')
+        (a₁ +ₐ a₂) ∷ₗ ts₂ ++ₗ ts₁ , Code N (Vₐ fresh'')
       ],
       suc fresh'' ⟩
