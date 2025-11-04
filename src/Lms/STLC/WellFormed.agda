@@ -1,6 +1,7 @@
-module Lms.STLC.Properties where
+module Lms.STLC.WellFormed where
 
--- Metatheory and miscellaneous properties of λLMS.
+-- Metatheory and miscellaneous properties of λLMS, establishing that generated
+-- code is well-scoped and well-typed.
 --
 -- The key theorems are the various `evalms-_-typed` terms, which establish that
 -- the IR produced by evaluating a staged λLMS term is well-typed.
@@ -26,7 +27,10 @@ open import Data.Store as Store
 open import Data.Nat.Extensions
 open import Data.Vec.Extensions as Vec
 open import Data.Product.Extensions as Prod
-open import Lms.STLC
+
+open import Lms.STLC.Core
+open import Lms.STLC.IR
+open import Lms.STLC.Evaluation
 
 private variable
   T : Set
