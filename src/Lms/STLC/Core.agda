@@ -37,22 +37,21 @@ Ctx w = Context.Ctx (Typ w)
 data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   -- STLC
   C : ∀{Γ} → ℕ → Tm w {n} N Γ
-  V : ∀{Γ : Ctx w n} {τ} → (i : ℕ) → Γ [ i ]= τ → Tm w τ Γ
-  λ' : ∀(τ₁ : Typ w) {τ₂} {Γ : Ctx w n} → Tm w τ₂ (τ₁ ∷ Γ) → Tm w (τ₁ => τ₂) Γ
-  _$_ : ∀{τ₁ τ₂} {Γ : Ctx w n} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w τ₂ Γ
+  V : ∀{Γ τ} → (i : ℕ) → Γ [ i ]= τ → Tm w {n} τ Γ
+  λ' : ∀{Γ} (τ₁ : Typ w) {τ₂} → Tm w τ₂ (τ₁ ∷ Γ) → Tm w {n} (τ₁ => τ₂) Γ
+  _$_ : ∀{Γ τ₁ τ₂} → Tm w (τ₁ => τ₂) Γ → Tm w τ₁ Γ → Tm w {n} τ₂ Γ
 
   -- Cut
-  Let : ∀{τ₁ τ₂} {Γ : Ctx w n} → Tm w τ₁ Γ → Tm w τ₂ (τ₁ ∷ Γ) → Tm w τ₂ Γ
+  Let : ∀{Γ τ₁ τ₂} → Tm w τ₁ Γ → Tm w τ₂ (τ₁ ∷ Γ) → Tm w {n} τ₂ Γ
 
   -- Nat
-  _+'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
+  _+'_ : ∀{Γ} → Tm w N Γ → Tm w N Γ → Tm w {n} N Γ
 
   CC : ∀{Γ} → Tm Staged N Γ → Tm Staged {n} (Rep N) Γ
-  {-
-  λλ : ∀ τ₁ {τ₂ bτ₁ bτ₂} {Γ : Ctx Staged n} → {IsBase bτ₁ τ₁} → {IsBase bτ₂ τ₂} →
-    Tm Staged (τ₁ => τ₂) Γ → Tm Staged (Rep (bτ₁ => bτ₂)) Γ
-    -}
-  _++_ : ∀{Γ : Ctx Staged n} →
-    Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
-  _$$_ : ∀{τ₁ τ₂} {Γ : Ctx Staged n} →
-    Tm Staged (Rep (τ₁ => τ₂)) Γ → Tm Staged (Rep τ₁) Γ → Tm Staged (Rep τ₂) Γ
+  λλ : ∀{Γ} τ₁ {τ₂} →
+    Tm Staged (Rep τ₁ => Rep τ₂) Γ → Tm Staged {n} (Rep (τ₁ => τ₂)) Γ
+  _++_ : ∀{Γ} →
+    Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged {n} (Rep N) Γ
+  _$$_ : ∀{Γ τ₁ τ₂} →
+    Tm Staged (Rep (τ₁ => τ₂)) Γ → Tm Staged (Rep τ₁) Γ →
+    Tm Staged {n} (Rep τ₂) Γ

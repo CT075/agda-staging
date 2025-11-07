@@ -97,3 +97,10 @@ data _⊢ts_⇓_ where
     vs ++ₗ env ≡ env' →
     env ⊢ts ts ⇓ vs → env' ⊢t t ⇓ v →
     env ⊢ts t ∷ₗ ts ⇓ v ∷ₗ vs
+
+record ⊢p⟨_,_⟩⇓_ (ts : List Expr) (v : Atom) (x : Val) : Set where
+  constructor eval-prog
+  field
+    {store} : List Val
+    eval-ts : nilₗ ⊢ts ts ⇓ store
+    eval-t : store ⊢v v ⇓ x
