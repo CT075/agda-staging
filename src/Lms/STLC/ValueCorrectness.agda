@@ -11,6 +11,7 @@ open import Lms.STLC.Evaluation
 
 private variable
   n : ℕ
+  fresh fresh' fresh'' : ℕ
 
 forgetTyp : Typ Staged → Typ Base
 forgetTyp N = N
@@ -40,6 +41,9 @@ forget (CC e) = forget e
 forget (e₁ ++ e₂) = forget e₁ +' forget e₂
 forget (e₁ $$ e₂) = forget e₁ $ forget e₂
 
-data _≈_ : ∀{τ} → IR.Val → Val Base τ → Set where
-  const-≈ : ∀ x → Constₐ x ≈ Const x
-  abs-≈ : {!!}
+{-
+valueCorrectness :
+  ∀ {τ e ts a va vb} →
+  ∅ ⊢⟨ e , zero ⟩⇓⟨[ ts , Code τ a ], fresh ⟩ →
+  ∃[ va , vb ](⊢p⟨ ts , a ⟩⇓ va × ∅ ⊢ forget e ⇓ vb × va ≈ vb)
+-}
