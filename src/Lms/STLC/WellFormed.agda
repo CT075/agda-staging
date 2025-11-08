@@ -29,7 +29,7 @@ open import Data.Vec.Extensions as Vec
 open import Data.Product.Extensions as Prod
 
 open import Lms.STLC.Core
-open import Lms.STLC.IR renaming (Expr to AnfExpr)
+open import Lms.STLC.IR renaming (Expr to AnfExpr) hiding (Val)
 open import Lms.STLC.Evaluation
 
 private variable
