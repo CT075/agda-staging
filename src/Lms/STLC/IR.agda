@@ -53,6 +53,13 @@ data _⊢ts_∈_ where
     Γ ⊢ts xs ∈ Γ' → Γs ⊢t x ∈ τ →
     Γ ⊢ts x ∷ xs ∈ τ ∷ Γ'
 
+record Prog : Set where
+  constructor MkProg
+  field
+    {stepc} : ℕ
+    steps : Vec Expr stepc
+    result : Atom
+
 data Val : Set where
   Constₐ : ℕ → Val
   Closureₐ : Context.Ctx Val n → Vec Expr m → Atom → Val

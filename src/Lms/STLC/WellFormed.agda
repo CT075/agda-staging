@@ -132,7 +132,7 @@ evalms-wf : ∀{Γ : Ctx _ n} {env : Env Γ} {τ e} {v : Val _ τ} {ts : Vec _ m
 evalms-wf Δ env⋖Δ (evalms-C x) = [] , anf-nil , admit-N _ _
 evalms-wf Δ env⋖Δ (evalms-V env[i]=v) =
   [] , anf-nil , ⋖-lookup env⋖Δ env[i]=v
-evalms-wf Δ env⋖Δ evalms-λ =
+evalms-wf Δ env⋖Δ (evalms-λ _ _) =
   [] , anf-nil , admit-=> _ (extend-⋖ env⋖Δ (++-⊆ _ _))
 evalms-wf Δ env⋖Δ
   (evalms-$

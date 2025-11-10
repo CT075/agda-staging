@@ -30,7 +30,7 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
   eval-C : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
   eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} {τ} i {p} v → env [ i ]↦ v ∈ τ →
     env ⊢ V i p ⇓ v
-  eval-λ : ∀{Γ : Ctx Base n} {env : Env Γ} {τ τ'} {e : Tm Base τ' _} →
+  eval-λ : ∀{Γ : Ctx Base n} (env : Env Γ) {τ τ'} (e : Tm Base τ' _) →
     env ⊢ λ' τ e ⇓ Closure env e
   eval-$ : ∀{Γ : Ctx Base n} {env : Env Γ} {Γ' : Ctx Base n'} {env' : Env Γ'}
     {τ₁ τ₂} {e₁ : Tm Base (τ₁ => τ₂) Γ} {e₂ x e' v} →
@@ -42,7 +42,8 @@ data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val 
     env ⊢ e₁ ⇓ x → (cons x env) ⊢ e₂ ⇓ v →
     env ⊢ Let e₁ e₂ ⇓ v
   eval-+ : ∀{Γ : Ctx Base n} {env : Env Γ} {e₁ e₂ x₁ x₂ v} →
-    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ → v ≡ x₁ + x₂ →
+    v ≡ x₁ + x₂ →
+    env ⊢ e₁ ⇓ Const x₁ → env ⊢ e₂ ⇓ Const x₂ →
     env ⊢ e₁ +' e₂ ⇓ Const v
 
 private variable
@@ -68,7 +69,7 @@ data _,_⊢_⇓[_,_] : ∀{τ} {Γ : Ctx Staged n} →
     env , offs ⊢ C x ⇓[ [] , Const x ]
   evalms-V : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ p v} → env [ i ]↦ v ∈ τ →
     env , offs ⊢ V i p ⇓[ [] , v ]
-  evalms-λ : ∀{Γ : Ctx Staged n} {env : Env Γ} {τ τ'} {e : Tm _ τ' (τ ∷ Γ)} →
+  evalms-λ : ∀{Γ : Ctx Staged n} (env : Env Γ) {τ τ'} (e : Tm _ τ' (τ ∷ Γ)) →
     env , offs ⊢ λ' τ e ⇓[ [] , Closure env e ]
   evalms-$ :
     ∀ {Γ : Ctx Staged n} {env : Env Γ} {Γ' : Ctx Staged n'} {env' : Env Γ'}
