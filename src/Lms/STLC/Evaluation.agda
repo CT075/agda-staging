@@ -120,3 +120,7 @@ data _,_⊢_⇓[_,_] : ∀{τ} {Γ : Ctx Staged n} →
     env , offs ⊢ e₁ ⇓[ ts₁ , Code (τ => τ') a₁ ] →
     env , offs' ⊢ e₂ ⇓[ ts₂ , Code τ a₂ ] →
     env , offs ⊢ e₁ $$ e₂ ⇓[ a₁ $ₐ a₂ ∷ ts₂ ⧺ ts₁ , Code τ' (Vₐ offs'') ]
+
+_,_⊢r_⇓_ : ∀{Γ : Ctx Staged n} {τ} →
+  Env Γ → ℕ → Tm Staged (Rep τ) Γ → Anf.Prog → Set
+env , offs ⊢r e ⇓ [ ts , v ] = env , offs ⊢ e ⇓[ ts , Code _ v ]

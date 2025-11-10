@@ -7,6 +7,7 @@ open import Relation.Binary.PropositionalEquality using (refl)
 
 open import Data.Product.Extensions
 open import Data.Context using (_[_]=_; here; there)
+open import Data.Store using (nil; cons)
 
 open import Lms.STLC.Core
 open import Lms.STLC.IR as Anf hiding (Val; Env)
@@ -59,13 +60,21 @@ lift (e₁ $ e₂) = lift e₁ $$ lift e₂
 lift (Let e₁ e₂) = Let (lift e₁) (lift e₂)
 lift (e₁ +' e₂) = lift e₁ ++ lift e₂
 
-data _≈_ : ∀{τ} → Val Base τ → Anf.Val → Set where
-  ≈-N : ∀ x → Const x ≈ Constₐ x
+lift-eval :
+  ∀ {Γ : Ctx Base n} {env : Env Γ} {env' : Env (liftCtx Γ)}
+    {τ} {e : Tm Base τ Γ} {v} →
+  env ⊢ e ⇓ v → Σ[ p ∈ Anf.Prog ](env' , zero ⊢r lift e ⇓ p)
+lift-eval (eval-C x) = [ [] , Cₐ x ] , evalms-CC (evalms-C x)
+lift-eval (eval-V i v env[i]=v) = {!!}
+lift-eval (eval-λ env e) = {! !}
+lift-eval (eval-$ e⇓ e₁⇓ e₂⇓) = {! !}
+lift-eval (eval-let e₁⇓ e₂⇓) = {! !}
+lift-eval (eval-+ refl e₁⇓ e₂⇓) = {!!}
 
 {-
 lift-correct : ∀ {Γ : Ctx Base n} {env : Env Γ} {τ} {e : Tm Base τ Γ} →
   env ⊢ e ⇓ v → {!!}
--}
+  -}
 
 {-
 valueCorrectness :

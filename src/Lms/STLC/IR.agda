@@ -54,7 +54,7 @@ data _⊢ts_∈_ where
     Γ ⊢ts x ∷ xs ∈ τ ∷ Γ'
 
 record Prog : Set where
-  constructor MkProg
+  constructor [_,_]
   field
     {stepc} : ℕ
     steps : Vec Expr stepc
