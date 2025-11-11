@@ -28,8 +28,8 @@ data Val where
 infix 4 _⊢_⇓_
 data _⊢_⇓_ : ∀{τ} {Γ : Ctx Base n} → Env Γ → Tm Base τ Γ → Val Base τ → Set where
   eval-C : ∀{Γ : Ctx Base n} {env : Env Γ} x → env ⊢ C x ⇓ Const x
-  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} {τ} i {p} v → env [ i ]↦ v ∈ τ →
-    env ⊢ V i p ⇓ v
+  eval-V : ∀{Γ : Ctx Base n} {env : Env Γ} {τ i Γ[i]=τ v} → env [ i ]↦ v ∈ τ →
+    env ⊢ V i Γ[i]=τ ⇓ v
   eval-λ : ∀{Γ : Ctx Base n} (env : Env Γ) {τ τ'} (e : Tm Base τ' _) →
     env ⊢ λ' τ e ⇓ Closure env e
   eval-$ : ∀{Γ : Ctx Base n} {env : Env Γ} {Γ' : Ctx Base n'} {env' : Env Γ'}

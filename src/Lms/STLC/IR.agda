@@ -4,6 +4,7 @@ open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
 open import Data.Vec as Vec
   using (Vec; _∷_; [])
   renaming (_++_ to _⧺_)
+open import Data.Product as Prod
 open import Relation.Binary.PropositionalEquality using (_≡_)
 
 open import Data.Context as Context using (_[_]=_)
@@ -105,3 +106,6 @@ data _⊢ts_⇓_ where
     vs ⧺ env ≡ env' →
     env ⊢ts ts ⇓ vs → env' ⊢t t ⇓ v →
     env ⊢ts t ∷ ts ⇓ v ∷ vs
+
+_⊢p_⇓_ : Env n → Prog → Val → Set
+env ⊢p [ ts , e ] ⇓ v = ∃[ vs ] (env ⊢ts ts ⇓ vs × vs ⧺ env ⊢v e ⇓ v)

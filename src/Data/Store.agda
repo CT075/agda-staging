@@ -15,6 +15,7 @@ data Store (Typ : Set ℓ) (Val : Typ → Set ℓ) : Ctx Typ n → Set ℓ where
   nil : Store Typ Val []
   cons : ∀{t} {Γ : Ctx Typ n} → Val t → Store Typ Val Γ → Store Typ Val (t ∷ Γ)
 
+-- This can't be defined as `env[i]↦v∈τ` directly because `v` depends on `τ`.
 data MapsTo {Typ : Set ℓ} {Val : Typ → Set ℓ} : {Γ : Ctx Typ n} →
   Store Typ Val Γ → ℕ → (τ : Typ) → Val τ → Set ℓ
   where

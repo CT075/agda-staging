@@ -1,6 +1,6 @@
 module Data.Vec.Extensions where
 
-open import Level using (Level)
+open import Level using (Level; _⊔_)
 open import Data.Vec
 open import Data.Vec.Properties
 open import Data.Product
@@ -90,3 +90,15 @@ module ≅-Reasoning where
   infix 3 _∎
 
   syntax step-syntax xs xs≅ys ys≅zs = xs ≅⟨ xs≅ys ⟩ ys≅zs
+
+infixr 4 _,ᵥ_
+record ∃ᵥ-syntax {a b : Level} {T : Set a} (P : ∀{n} → Vec T n → Set b) :
+    Set (a ⊔ b)
+  where
+  constructor _,ᵥ_
+  field
+    {len} : ℕ
+    prjᵥ : Vec T len
+    prjₒ : P prjᵥ
+
+syntax ∃ᵥ-syntax (λ xs → P) = ∃ᵥ[ xs ] P
