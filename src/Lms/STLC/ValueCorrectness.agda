@@ -1,170 +1,172 @@
 module Lms.STLC.ValueCorrectness where
 
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
-open import Data.Vec as Vec using (Vec; []; _∷_)
+open import Data.Nat.Properties as Nat
+open import Data.Vec as Vec using (Vec; []; _∷_) renaming (_++_ to _⧺_)
 open import Data.Product as Prod
-open import Relation.Binary.PropositionalEquality using (refl)
+open import Data.Unit as Unit using (⊤; tt)
+open import Data.Empty as Void
+open import Relation.Binary.PropositionalEquality using (refl; _≡_)
+open import Relation.Nullary.Decidable using (yes; no)
 
 open import Data.Product.Extensions
-open import Data.Context using (_[_]=_; here; there)
+open import Data.Vec.Extensions
+open import Data.Context as Context hiding (Ctx)
 open import Data.Store as Store using (nil; cons; store-lookup-syntax)
 
 open import Lms.STLC.Core
 open import Lms.STLC.IR as Anf hiding (Val; Env)
+open import Lms.STLC.Specialization
 open import Lms.STLC.Evaluation
 
 private variable
-  n : ℕ
-  offs : ℕ
-
-forgetTyp : Typ Staged → Typ Base
-forgetTyp N = N
-forgetTyp (τ₁ => τ₂) = forgetTyp τ₁ => forgetTyp τ₂
-forgetTyp (Rep τ) = τ
-
-forgetCtx : Ctx Staged n → Ctx Base n
-forgetCtx = Vec.map forgetTyp
-
-forget-lookup : ∀{Γ : Ctx Staged n} {i τ} →
-  Γ [ i ]= τ → (forgetCtx Γ)[ i ]= (forgetTyp τ)
-forget-lookup here = here
-forget-lookup (there Γ[i]=τ) = there (forget-lookup Γ[i]=τ)
-
-forget :
-  ∀ {Γ : Ctx Staged n} {τ} →
-  Tm Staged τ Γ → Tm Base (forgetTyp τ) (forgetCtx Γ)
-forget (C x) = C x
-forget (V i Γ[i]=τ) = V i (forget-lookup Γ[i]=τ)
-forget (λ' τ e) = λ' (forgetTyp τ) (forget e)
-forget (e₁ $ e₂) = forget e₁ $ forget e₂
-forget (Let e₁ e₂) = Let (forget e₁) (forget e₂)
-forget (e₁ +' e₂) = forget e₁ +' forget e₂
-forget (CC e) = forget e
-forget (λλ τ e) = forget e
-forget (e₁ ++ e₂) = forget e₁ +' forget e₂
-forget (e₁ $$ e₂) = forget e₁ $ forget e₂
-
-liftCtx : Ctx Base n → Ctx Staged n
-liftCtx = Vec.map Rep
-
-lift-lookup : ∀{Γ : Ctx Base n} {i τ} →
-  Γ [ i ]= τ → (liftCtx Γ)[ i ]= Rep τ
-lift-lookup here = here
-lift-lookup (there Γ[i]=τ) = there (lift-lookup Γ[i]=τ)
-
-lift : ∀{Γ : Ctx Base n} {τ} → Tm Base τ Γ → Tm Staged (Rep τ) (liftCtx Γ)
-lift (C x) = CC (C x)
-lift (V i Γ[i]=τ) = V i (lift-lookup Γ[i]=τ)
-lift (λ' τ e) = λλ τ (λ' (Rep τ) (lift e))
-lift (e₁ $ e₂) = lift e₁ $$ lift e₂
-lift (Let e₁ e₂) = Let (lift e₁) (lift e₂)
-lift (e₁ +' e₂) = lift e₁ ++ lift e₂
+  w : W
+  n n' n₁ n₂ m offs i : ℕ
 
 data _≈_ : ∀{τ} → Val Base τ → Anf.Val → Set where
-  ≈-Const : ∀ x → Const x ≈ Constₐ x
 
-data _~[_,_] : ∀{Γ : Ctx Base n} →
-    Env Γ →
-    Env (liftCtx Γ) → Anf.Env offs → Set
-  where
-  ~-nil : nil ~[ nil , [] ]
-  ~-cons-C : ∀{Γ : Ctx Base n} {env : Env Γ} {envₛ} {envₜ : Anf.Env offs} x →
-    env ~[ envₛ , envₜ ] →
-    cons (Const x) env ~[ cons (Code N (Cₐ x)) envₛ , envₜ ]
-  ~-cons-V :
-    ∀ {Γ : Ctx Base n} {env : Env Γ} {envₛ i τ}
-      {v : Val Base τ} {envₜ : Anf.Env offs} {v'} →
-    envₜ [ i ]↦ v' → v ≈ v' → env ~[ envₛ , envₜ ] →
-    cons v env ~[ cons (Code τ (Vₐ i)) envₛ , envₜ ]
+infix 4 _⊢v_~_ _⊢e⟨_,_⟩~⟨_,_⟩ _⊨_~_
+_⊢v_~_ : ∀{τ τ'} →
+  Anf.Env offs → Val Staged τ → Val Base τ' → Set
+_⊢e⟨_,_⟩~⟨_,_⟩ : ∀{Γ : Ctx Staged n} {τ} {Γ' : Ctx Base n'} {τ'} →
+  Anf.Env offs → Env Γ → Tm _ τ Γ → Env Γ' → Tm _ τ' Γ' → Set
+_⊨_~_ : ∀{Γ : Ctx Staged n} {Γ' : Ctx Base n} →
+  Anf.Env offs → Env Γ → Env Γ' → Set
 
-module LookupMetaM where
-  record T {Γ : Ctx Staged n}
-      (envₛ : Env Γ) (envₜ : Anf.Env offs) τ i (v : Val Base τ) : Set
-    where
-    constructor LM
-    field
-      leaf : Anf.Atom
-      lookup-proof : envₛ [ i ]↦ Code τ leaf ∈ Rep τ
-      result : Anf.Val
-      leaf-evals : envₜ ⊢v leaf ⇓ result
-      v≈result : v ≈ result
+env ⊢v Const x ~ Const x' = x ≡ x'
+env ⊢v Const _ ~ Closure _ _ = ⊥
+env ⊢v Closure _ _ ~ Const _ = ⊥
+_ ⊢v Closure {n = 0} {τ₁ = τ} envₛ e ~ Closure {n = 0} {τ₁ = τ'} envₛ' e' =
+    ∀ {offs} (env : Anf.Env offs) →
+    ( ⊤
+    × ∀ {x : Val _ τ} {x' : Val _ τ'} →
+      env ⊢v x ~ x' → env ⊢e⟨ cons x envₛ , e ⟩~⟨ cons x' envₛ' , e' ⟩)
+_ ⊢v Closure {n = suc _} _ _ ~ Closure {n = 0} _ _ = ⊥
+_ ⊢v Closure {n = 0} _ _ ~ Closure {n = suc _} _ _ = ⊥
+_⊢v_~_ {τ = τ₁ => _} {τ' = τ₁' => _} _
+  (Closure {n = suc n₁} envₛ@(cons v tenvₛ) e)
+  (Closure {n = suc n₂} envₛ'@(cons v' tenvₛ') e')
+  with n₁ ≟ n₂
+... | no _ = ⊥
+... | yes refl =
+    ∀ {offs} (env : Anf.Env offs) →
+    ( env ⊢v v ~ v' × env ⊨ tenvₛ ~ tenvₛ'
+    × ∀ {x : Val _ τ₁} {x' : Val _ τ₁'} →
+      env ⊢v x ~ x' → env ⊢e⟨ cons x envₛ , e ⟩~⟨ cons x' envₛ' , e' ⟩)
+env ⊢v Code τ p ~ v' = ∃[ v ] (env ⊢v p ⇓ v × v' ≈ v)
 
-  wkₛ :
-    ∀ {Γ : Ctx Staged n} {envₛ : Env Γ} {envₜ : Anf.Env offs}
-      {τ i} {v : Val Base τ} {τ'} {x : Val Staged τ'} →
-    T envₛ envₜ τ i v →
-    T (cons x envₛ) envₜ τ i v
-  wkₛ (LM a proof b c d) = LM a (Store.there proof) b c d
+_⊢e⟨_,_⟩~⟨_,_⟩ {offs} envₜ envₛ e envₛ' e' =
+  ∃[ v ](∃[ v' ](∃ᵥ[ ts ](
+    envₛ , offs ⊢ e ⇓[ ts , v ] ×
+    envₛ' ⊢ e' ⇓ v' ×
+    Σ[ vs ∈ Anf.Env _ ](envₜ ⊢ts ts ⇓ vs × (vs ⧺ envₜ) ⊢v v ~ v'))))
 
-open LookupMetaM using (LM) renaming (T to LookupMeta) public
-
-~-lookup : ∀{Γ : Ctx Base n} {env : Env Γ} {envₛ} {envₜ : Anf.Env offs} {i τ v} →
-  env ~[ envₛ , envₜ ] → env [ i ]↦ v ∈ τ →
-  LookupMeta envₛ envₜ τ i v
-~-lookup (~-cons-C x _) Store.here =
-  LM _ Store.here _ (Anf.eval-c x) (≈-Const x)
-~-lookup (~-cons-C _ env~[envₛ,envₜ]) (Store.there env[i]↦p∈τ) =
-  LookupMetaM.wkₛ (~-lookup env~[envₛ,envₜ] env[i]↦p∈τ)
-~-lookup (~-cons-V {v' = v'} envₜ[i]↦v' v≈v' _) Store.here =
-  LM _ Store.here v' (Anf.eval-v envₜ[i]↦v') v≈v'
-~-lookup (~-cons-V _ _ env~[envₛ,envₜ]) (Store.there env[i]↦p∈τ) =
-  LookupMetaM.wkₛ (~-lookup env~[envₛ,envₜ] env[i]↦p∈τ)
-
-module LiftEquivM where
-  record T
-      {Γ : Ctx Base n} (envₛ : Env (liftCtx Γ)) (envₜ : Anf.Env offs)
-      {τ} (e : Tm Base τ Γ) (v : Val Base τ) : Set
-    where
-    constructor LE
-    field
-      anf-e : Anf.Prog
-      evalₛ : envₛ , offs ⊢r lift e ⇓ anf-e
-      result : Anf.Val
-      evalₜ : envₜ ⊢p anf-e ⇓ result
-      v≈result : v ≈ result
-
-open LiftEquivM using (LE) renaming (T to LiftEquiv) public
-
-lift-eval :
-  ∀ {Γ : Ctx Base n} {env : Env Γ}
-    {envₛ : Env (liftCtx Γ)} {envₜ : Anf.Env offs}
-    {τ} {e : Tm Base τ Γ} {v} →
-  env ~[ envₛ , envₜ ] → env ⊢ e ⇓ v →
-  LiftEquiv envₛ envₜ e v
-lift-eval env~[envₛ,envₜ] (eval-C x) = LE
-  [ [] , Cₐ x ]
-  (evalms-CC (evalms-C x))
-  (Constₐ x)
-  ([] , Anf.eval-nil , Anf.eval-c x)
-  (≈-Const x)
-lift-eval env~[envₛ,envₜ] (eval-V env[i]↦v∈τ) =
-  let
-    LM leaf envₛ[i]↦leaf result envₜ⊢leaf⇓result v≈result =
-      ~-lookup env~[envₛ,envₜ] env[i]↦v∈τ
-  in LE
-    [ [] , leaf ]
-    (evalms-V envₛ[i]↦leaf)
-    result
-    ([] , Anf.eval-nil , envₜ⊢leaf⇓result)
-    v≈result
-lift-eval {offs = offs} env~[envₛ,envₜ] (eval-λ env e) = LE
-  [ {!!} ∷ [] , Vₐ offs ]
-  {!!}
-  {!!}
-  {!!}
-  {!!}
-lift-eval env~[envₛ,envₜ] (eval-$ e⇓ e₁⇓ e₂⇓) = {! !}
-lift-eval env~[envₛ,envₜ] (eval-let e₁⇓ e₂⇓) = {! !}
-lift-eval env~[envₛ,envₜ] (eval-+ refl e₁⇓ e₂⇓) = {!!}
+envₜ ⊨ nil ~ nil = ⊤
+envₜ ⊨ cons v envₛ ~ cons v' env =
+  envₜ ⊢v v ~ v' × envₜ ⊨ envₛ ~ env
 
 {-
-lift-correct : ∀ {Γ : Ctx Base n} {env : Env Γ} {τ} {e : Tm Base τ Γ} →
-  env ⊢ e ⇓ v → {!!}
-  -}
+data _⊨_~_ where
+  ~-nil : ∀{envₜ : Anf.Env offs} → envₜ ⊨ nil ~ nil
+  ~-cons :
+    ∀ {Γ : Ctx Staged n} {Γ' : Ctx Base n}
+      {envₜ : Anf.Env offs} {envₛ : Env Γ} {env : Env Γ'}
+      {τ τ'} {v : Val _ τ} {v' : Val _ τ'} →
+    envₜ ⊢v v ~ v' →
+    envₜ ⊨ envₛ ~ env →
+    envₜ ⊨ cons v envₛ ~ cons v' env
 
+wk-⊨ : ∀{Γ : Ctx Staged n} {Γ' : Ctx Base n}
+  {envₜ : Anf.Env offs} {envₛ : Env Γ} {env : Env Γ'} x →
+  envₜ ⊨ envₛ ~ env →
+  x ∷ envₜ ⊨ envₛ ~ env
+wk-⊨ x ~-nil = ~-nil
+wk-⊨ x (~-cons v~v' envₛ~env) = ~-cons {! v~v' !} (wk-⊨ x envₛ~env)
+    -}
+
+~-lookup :
+  ∀ {Γ : Ctx Base n} {Γₛ : Ctx Staged n} {τ τ'}
+    {envₜ : Anf.Env offs} {env : Env Γ} {envₛ : Env Γₛ} →
+  envₜ ⊨ envₛ ~ env →
+  Γₛ [ i ]= τ →
+  Γ [ i ]= τ' →
+  ∃[ v ](∃[ v' ](envₛ [ i ]↦ v ∈ τ × env [ i ]↦ v' ∈ τ' × envₜ ⊢v v ~ v'))
 {-
+~-lookup
+    {env = cons v' _} {envₛ = cons v _}
+    (~-cons v~v' ⊨env) here here =
+  v , v' , Store.here , Store.here , v~v'
+~-lookup (~-cons x ⊨env) here (there Γₛ[i]=τ') =
+  ⊥-elim (<-irrefl refl ([]=→< Γₛ[i]=τ'))
+~-lookup (~-cons x ⊨env) (there Γ[i]=τ) here =
+  ⊥-elim (<-irrefl refl ([]=→< Γ[i]=τ))
+~-lookup (~-cons x ⊨env) (there Γ[i]=τ) (there Γₛ[i]=τ') =
+  let v , v' , p , p' , v~v' = ~-lookup ⊨env Γ[i]=τ Γₛ[i]=τ'
+   in v , v' , Store.there p , Store.there p' , v~v'
+-}
+
+ctx-env-lookup : ∀{Γ : Ctx w n} {τ} →
+  (env : Env Γ) → Γ [ i ]= τ → Σ[ v ∈ _ ](env [ i ]↦ v ∈ τ)
+ctx-env-lookup (cons x _) here = x , Store.here
+ctx-env-lookup (cons _ env) (there Γ[i]=τ) =
+  let x , p = ctx-env-lookup env Γ[i]=τ
+   in x , Store.there p
+
 valueCorrectness :
-  ∀ {τ e ts a va vb} →
-  ∅ ⊢⟨ e , zero ⟩⇓⟨[ ts , Code τ a ], fresh ⟩ →
-  ∃[ va , vb ](⊢p⟨ ts , a ⟩⇓ va × ∅ ⊢ forget e ⇓ vb × va ≈ vb)
+  ∀ {Γ : Ctx Staged n} {τ} {e : Tm _ τ Γ} {envₛ : Env Γ}
+    {Γ' : Ctx Base n} {τ'} {e' : Tm _ τ' Γ'} {env : Env Γ'}
+    {envₜ : Anf.Env offs} →
+  envₜ ⊨ envₛ ~ env → e ≤ e' →
+  envₜ ⊢e⟨ envₛ , e ⟩~⟨ env , e' ⟩
+valueCorrectness ⊨env (≤-C x) = {!!}
+{-
+  Const x , Const x , [] ,ᵥ evalms-C x , eval-C x , [] , eval-nil , refl
+valueCorrectness ⊨env (≤-V i Γₛ[i]=τ Γ[i]=τ' _) =
+  let v , v' , envₛ[i]↦v , env[i]↦v' , v~v' =
+        ~-lookup ⊨env Γₛ[i]=τ Γ[i]=τ'
+   in ( v
+      , v'
+      , []
+      ,ᵥ evalms-V envₛ[i]↦v
+      , eval-V env[i]↦v'
+      , []
+      , eval-nil
+      , v~v')
+valueCorrectness {envₛ = envₛ} {env = env}
+    ⊨env (≤-λ {eₛ = e} {eₜ = e'} _ e≤e') =
+  ( Closure envₛ e
+  , Closure env e'
+  , []
+  ,ᵥ  evalms-λ envₛ e
+  , eval-λ env e'
+  , []
+  , eval-nil
+  , {! λ x~x' → valueCorrectness (~-cons x~x' {!!}) e≤e'!})
+valueCorrectness {offs = offs} {envₛ = envₛ} {env = env} {envₜ = envₜ} ⊨env
+  (≤-$ {τ₁ = τ₁} {τ₂ = τ₂} {τ₁' = τ₁'} {τ₂' = τ₂'}
+    e₁≤e₁' e₂≤e₂') =
+  let
+    f , f' , ts₁ ,ᵥ e₁⇓f , e₁'⇓f' , vs₁ , ts₁⇓vs₁ , f~f' =
+      valueCorrectness ⊨env e₁≤e₁'
+    {-
+    x , x' , ts₂ ,ᵥ e₂⇓x , e₂'⇓x' , vs₂ , ts₂⇓vs₂ , x~x' =
+      {! valueCorrectness {envₜ = vs₁ ⧺ envₜ} ⊨env e₂≤e₂' !}
+      -}
+  in
+    {! f~f' x~x' !}
+    {-
+  where
+    cont :
+      ∀ {f : Val Staged (τ₁ => τ₂)} {f' : Val Base (τ₁' => τ₂')}
+        {vs₁ : Anf.Env n} →
+      vs₁ ⧺ envₜ ⊢v f ~ f' →
+      {!!}
+    cont = {!!}
+    -}
+valueCorrectness ⊨env (≤-let e≤e' e≤e'') = {! !}
+valueCorrectness ⊨env (≤-+ e≤e' e≤e'') = {! !}
+valueCorrectness ⊨env (≤-CC e≤e') = {! !}
+valueCorrectness ⊨env ≤-λλ = {! !}
+valueCorrectness ⊨env (≤-++ e≤e' e≤e'') = {! !}
+valueCorrectness ⊨env (≤-$$ e≤e' e≤e'') = {! !}
 -}
