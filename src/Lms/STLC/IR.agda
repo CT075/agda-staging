@@ -4,15 +4,16 @@ open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
 open import Data.Vec as Vec
   using (Vec; _∷_; [])
   renaming (_++_ to _⧺_)
+open import Data.Vec.Extensions as Vec
 open import Data.Product as Prod
-open import Relation.Binary.PropositionalEquality using (_≡_)
+open import Relation.Binary.PropositionalEquality using (refl; _≡_)
 
 open import Data.Context as Context using (_[_]=_)
 
 open import Lms.STLC.Core
 
 private variable
-  n n' n'' m i : ℕ
+  n n' n'' m i n₁ n₂ : ℕ
 
 data Atom : Set where
   Cₐ : ℕ → Atom
@@ -106,6 +107,19 @@ data _⊢ts_⇓_ where
     vs ⧺ env ≡ env' →
     env ⊢ts ts ⇓ vs → env' ⊢t t ⇓ v →
     env ⊢ts t ∷ ts ⇓ v ∷ vs
+
+ts⇓-join : ∀{ts₁ : Vec Expr n₁} {ts₂ : Vec Expr n₂} {vs₁ vs₂} →
+  env ⊢ts ts₁ ⇓ vs₁ →
+  vs₁ ⧺ env ⊢ts ts₂ ⇓ vs₂ →
+  env ⊢ts ts₂ ⧺ ts₁ ⇓ vs₂ ⧺ vs₁
+ts⇓-join ts₁⇓ eval-nil = ts₁⇓
+ts⇓-join {env = env} {vs₁ = vs₁} ts₁⇓ (eval-cons {t = t} {v} refl ts₂⇓ t⇓) =
+  eval-cons refl (ts⇓-join ts₁⇓ ts₂⇓)
+    (≅-subst (_⊢t t ⇓ v) (≅-symmetric (≅-++-assoc _ vs₁ env)) t⇓)
+
+wk-v⇓ : ∀{env : Env n} {a v} v' → env ⊢v a ⇓ v → v' ∷ env ⊢v a ⇓ v
+wk-v⇓ v' (eval-c x) = eval-c x
+wk-v⇓ v' (eval-v x) = eval-v (there x)
 
 _⊢p_⇓_ : Env n → Prog → Val → Set
 env ⊢p [ ts , e ] ⇓ v = ∃[ vs ] (env ⊢ts ts ⇓ vs × vs ⧺ env ⊢v e ⇓ v)

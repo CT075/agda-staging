@@ -36,9 +36,14 @@ launder-[]= : ∀{Γ : Ctx T n} {Δ : Ctx T m} {i t} →
   Γ ≅ Δ → Γ [ i ]= t → Δ [ i ]= t
 launder-[]= = ≅-subst _
 
+infix 4 _⊆_
 data _⊆_ {T : Set ℓ} : Ctx T n → Ctx T n' → Set ℓ where
   ⊆-refl : (Γ : Ctx T n) → Γ ⊆ Γ
   ⊆-cons : ∀{Γ : Ctx T n} {Γ' : Ctx T n'} → (t : T) → Γ ⊆ Γ' → Γ ⊆ (t ∷ Γ')
+
+⊆-uncons : ∀ {Γ : Ctx T n} {Γ' : Ctx T n'} {t} → t ∷ Γ ⊆ Γ' → Γ ⊆ Γ'
+⊆-uncons (⊆-refl _) = ⊆-cons _ (⊆-refl _)
+⊆-uncons (⊆-cons t t∷Γ⊆Γ') = ⊆-cons t (⊆-uncons t∷Γ⊆Γ')
 
 ++-⊆ : ∀(Γ : Ctx T n) (Γ' : Ctx T n') → Γ ⊆ (Γ' ++ Γ)
 ++-⊆ Γ [] = ⊆-refl Γ
