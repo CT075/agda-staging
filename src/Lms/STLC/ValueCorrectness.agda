@@ -18,12 +18,28 @@ open import Lms.STLC.Core
 open import Lms.STLC.IR as Anf hiding (Val; Env)
 open import Lms.STLC.Specialization
 open import Lms.STLC.Evaluation
+open import Lms.STLC.Normalization
 
 private variable
   w : W
   n n' n₁ n₂ m m' offs i : ℕ
 
-data _≈_ : ∀{τ} → Val Base τ → Anf.Val → Set where
+_≈_ : ∀{τ} → Val Base τ → Anf.Val → Set
+
+_≈_ (Const x) (Constₐ x') = x ≡ x'
+_≈_ (Const _) (Closureₐ _ _ _) = ⊥
+_≈_ (Closure _ _) (Constₐ _) = ⊥
+_≈_ {τ => τ'} (Closure env e) (Closureₐ vs ts a) =
+  ∀ {x : Val Base τ} {v : Val Base τ'}
+    {x' : Anf.Val} {v' : Anf.Val} {vs' : Anf.Env _} →
+  -- Given related inputs...
+  x ≈ x' →
+  -- If the surface-lang closure evaluates to v...
+  cons x env ⊢ e ⇓ v →
+  -- And the IR closure evaluates to v'...
+  x' ∷ vs ⊢ts ts ⇓ vs' → vs' ⧺ x' ∷ vs ⊢v a ⇓ v' →
+  -- Then v and v' are related.
+  v ≈ v'
 
 infix 4 _⊨v_~_ _⊨e⟨_,_⟩~⟨_,_⟩ _⊨ρ_~_
 _⊨v_~_ : ∀{τ τ'} →
@@ -37,7 +53,8 @@ envₜ ⊨v Const x ~ Const x' = x ≡ x'
 envₜ ⊨v Const _ ~ Closure _ _ = ⊥
 envₜ ⊨v Closure _ _ ~ Const _ = ⊥
 -- XXX: Do we need envₛ and envₛ' to be related?
-envₜ ⊨v Closure {τ₁ = τ} envₛ e ~ Closure {τ₁ = τ'} envₛ' e' =
+envₜ ⊨v eₛ@(Closure {τ₁ = τ} envₛ e) ~ Closure {τ₁ = τ'} envₛ' e' =
+  SNᵥ eₛ ×
   ∀ {offs} {env : Anf.Env offs} {x : Val _ τ} {x' : Val _ τ'} →
   envₜ ⊆ env → env ⊨v x ~ x' → env ⊨e⟨ cons x envₛ , e ⟩~⟨ cons x' envₛ' , e' ⟩
 envₜ ⊨v Code τ p ~ v' = ∃[ v ] (envₜ ⊢v p ⇓ v × v' ≈ v)
@@ -58,13 +75,29 @@ data _⊨ρ_~_ where
     envₜ ⊨ρ envₛ ~ env →
     envₜ ⊨ρ cons v envₛ ~ cons v' env
 
+v~⇒SN : ∀ {envₜ : Anf.Env offs} {τ τ'} {v : Val _ τ} {v' : Val _ τ'} →
+  envₜ ⊨v v ~ v' →
+  SNᵥ v
+v~⇒SN {v = Const x} v~v' = tt
+v~⇒SN {v = Closure env x} {v' = Closure _ _} (SN[v] , _) = SN[v]
+v~⇒SN {v = Code τ x} v~v' = tt
+
+ρ~⇒⊨ :
+  ∀ {envₜ : Anf.Env offs}
+    {Γ : Ctx Staged n} {Γ' : Ctx Base n}
+    {envₛ : Env Γ} {env : Env Γ'} →
+  envₜ ⊨ρ envₛ ~ env →
+  Γ ⊨ envₛ
+ρ~⇒⊨ ~-nil = models-nil
+ρ~⇒⊨ (~-cons v~v' envₛ~env) = models-cons (v~⇒SN v~v') (ρ~⇒⊨ envₛ~env)
+
 wk-v~ :
   ∀ {envₜ : Anf.Env offs} {τ τ'} {v : Val _ τ} {v' : Val _ τ'} x →
   envₜ ⊨v v ~ v' →
   x ∷ envₜ ⊨v v ~ v'
 wk-v~ {v = Const x} {Const .x} _ refl = refl
-wk-v~ {v = Closure envₛ eₛ} {Closure env e} _ IH =
-  λ x∷env'⊆env x~x' → IH (⊆-uncons x∷env'⊆env) x~x'
+wk-v~ {v = Closure envₛ eₛ} {Closure env e} _ (SN[v] , IH) =
+  SN[v] , λ x∷env'⊆env x~x' → IH (⊆-uncons x∷env'⊆env) x~x'
 wk-v~ {v = Code τ p} {v'} _ (v , env⊢p⇓v , v'≈v) =
   v , wk-v⇓ _ env⊢p⇓v , v'≈v
 
@@ -74,7 +107,8 @@ wk-ρ~ :
   envₜ ⊨ρ envₛ ~ env →
   x ∷ envₜ ⊨ρ envₛ ~ env
 wk-ρ~ _ ~-nil = ~-nil
-wk-ρ~ _ (~-cons v~v' envₛ~env) = ~-cons (wk-v~ _ v~v') (wk-ρ~ _ envₛ~env)
+wk-ρ~ _ (~-cons v~v' envₛ~env) =
+  ~-cons (wk-v~ _ v~v') (wk-ρ~ _ envₛ~env)
 
 extend-ρ~ :
   ∀ {Γ : Ctx Staged n} {Γ' : Ctx Base n}
@@ -112,6 +146,35 @@ ctx-env-lookup (cons _ env) (there Γ[i]=τ) =
   let x , p = ctx-env-lookup env Γ[i]=τ
    in x , Store.there p
 
+module EvalRel where
+  record T
+      (envₜ : Anf.Env offs)
+      {Γ : Ctx Staged n} {τ} (e : Tm _ τ Γ) (envₛ : Env Γ)
+      {Γ' : Ctx Base n} {τ'} (e' : Tm _ τ' Γ') (env : Env Γ') : Set
+    where
+    constructor Mk
+    field
+      v : Val Staged τ
+      v' : Val Base τ'
+      {len} : ℕ
+      ts : Vec Anf.Expr len
+      envₛ,offs⊢e⇓[ts,v] : envₛ , offs ⊢ e ⇓[ ts , v ]
+      envₛ'⊢e'⇓v' : env ⊢ e' ⇓ v'
+      vs : Anf.Env len
+      envₜ⊢ts⇓vs : envₜ ⊢ts ts ⇓ vs
+      vs⧺envₜ⊨v~v' : vs ⧺ envₜ ⊨v v ~ v'
+
+  open T public
+
+  wrap :
+    ∀ {envₜ : Anf.Env offs}
+      {Γ : Ctx Staged n} {τ} {e : Tm _ τ Γ} {envₛ : Env Γ}
+      {Γ' : Ctx Base n} {τ'} {e' : Tm _ τ' Γ'} {env : Env Γ'} →
+    envₜ ⊨e⟨ envₛ , e ⟩~⟨ env , e' ⟩ →
+    T envₜ e envₛ e' env
+  wrap (v , v' , ts ,ᵥ e⇓ , e'⇓ , vs , ts⇓ , v~v') =
+    Mk v v' ts e⇓ e'⇓ vs ts⇓ v~v'
+
 valueCorrectness :
   ∀ {Γ : Ctx Staged n} {τ} {e : Tm _ τ Γ} {envₛ : Env Γ}
     {Γ' : Ctx Base n} {τ'} {e' : Tm _ τ' Γ'} {env : Env Γ'}
@@ -136,22 +199,31 @@ valueCorrectness {envₛ = envₛ} {env = env}
   ( Closure envₛ e
   , Closure env e'
   , []
-  ,ᵥ  evalms-λ envₛ e
+  ,ᵥ evalms-λ envₛ e
   , eval-λ env e'
   , []
   , eval-nil
+  , (λ offs SN[x] → strongNormalization (models-cons SN[x] (ρ~⇒⊨ ρₛ~ρ)) offs e)
   , λ ρₜ⊆ρ x~x' → valueCorrectness (~-cons x~x' (extend-ρ~ ρₜ⊆ρ ρₛ~ρ)) e≤e')
-valueCorrectness {offs = offs} {envₛ = envₛ} {env = env} {envₜ = envₜ}
-  ρₛ~ρ
-  (≤-$ {τ₁ = τ₁} {τ₂} {τ₁'} {τ₂'} {e₁} {e₂} {e₁'} {e₂'}
-    e₁≤e₁' e₂≤e₂') =
-  let
-    f , f' , ts₁ ,ᵥ e₁⇓f , e₁'⇓f' , vs₁ , ts₁⇓vs₁ , f~f' =
-      valueCorrectness ρₛ~ρ e₁≤e₁'
-    x , x' , ts₂ ,ᵥ e₂⇓x , e₂'⇓x' , vs₂ , ts₂⇓vs₂ , x~x' =
-      valueCorrectness (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂'
-  in
-    cont {vs₂ = vs₂} f~f' x~x' e₁⇓f e₁'⇓f' e₂⇓x e₂'⇓x' ts₁⇓vs₁ ts₂⇓vs₂
+valueCorrectness {envₜ = envₜ} ρₛ~ρ (≤-$ e₁≤e₁' e₂≤e₂')
+  with f , f' , ts₁ ,ᵥ e₁⇓f , e₁'⇓f' , vs₁ , ts₁⇓vs₁ , f~f' ←
+    valueCorrectness ρₛ~ρ e₁≤e₁'
+  with x , x' , ts₂ ,ᵥ e₂⇓x , e₂'⇓x' , vs₂ , ts₂⇓vs₂ , x~x' ←
+    valueCorrectness (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂'
+  with f | f' | f~f'
+... | Closure _ _ | Closure _ _ | (_ , IH) =
+    let v , v' , ts₃ ,ᵥ e⇓v , e'⇓v' , vs₃ , ts₃⇓vs₃ , v~v' =
+          IH (++-⊆ _ vs₂) x~x'
+     in ( v
+        , v'
+        , ts₃ ⧺ ts₂ ⧺ ts₁
+        ,ᵥ evalms-$ refl refl e₁⇓f e₂⇓x e⇓v
+        , eval-$ e₁'⇓f' e₂'⇓x' e'⇓v'
+        , vs₃ ⧺ vs₂ ⧺ vs₁
+        , ts⇓-join (ts⇓-join ts₁⇓vs₁ ts₂⇓vs₂)
+            (≅-subst (_⊢ts ts₃ ⇓ vs₃)
+              (≅-symmetric (≅-++-assoc vs₂ vs₁ envₜ)) ts₃⇓vs₃)
+        , ≅-subst (_⊨v v ~ v') (reassoc vs₃ vs₂ vs₁ envₜ) v~v')
   where
     reassoc : ∀ {T a b c d}
       (xs : Vec T a) (ys : Vec T b)
@@ -163,38 +235,22 @@ valueCorrectness {offs = offs} {envₛ = envₛ} {env = env} {envₜ = envₜ}
       (xs ⧺ ys ⧺ zs) ⧺ ws ∎
       where
         open ≅-Reasoning
-
-    -- This ugliness is due to needing to pattern match on `f` and `f'`. There
-    -- might be a cleaner way to capture all the dependencies, but this is
-    -- easiest.
-    cont :
-      ∀ {f : Val Staged (τ₁ => τ₂)} {f' : Val Base (τ₁' => τ₂')}
-        {x : Val Staged τ₁} {x' : Val Base τ₁'}
-        {ts₁ : Vec Anf.Expr m} {ts₂ : Vec Anf.Expr m'}
-        {vs₁ : Anf.Env m} {vs₂ : Anf.Env m'} →
-      vs₁ ⧺ envₜ ⊨v f ~ f' → vs₂ ⧺ vs₁ ⧺ envₜ ⊨v x ~ x' →
-      envₛ , offs ⊢ e₁ ⇓[ ts₁ , f ] → env ⊢ e₁' ⇓ f' →
-      envₛ , m + offs ⊢ e₂ ⇓[ ts₂ , x ] → env ⊢ e₂' ⇓ x' →
-      envₜ ⊢ts ts₁ ⇓ vs₁ → vs₁ ⧺ envₜ ⊢ts ts₂ ⇓ vs₂ →
-      envₜ ⊨e⟨ envₛ , e₁ $ e₂ ⟩~⟨ env , e₁' $ e₂' ⟩
-    cont {f = Closure _ _} {f' = Closure _ _} {ts₁ = ts₁} {ts₂} {vs₁} {vs₂}
-        f~f' x~x' e₁⇓f e₁'⇓f' e₂⇓x e₂'⇓x' ts₁⇓vs₁ ts₂⇓vs₂ =
-      let v , v' , ts₃ ,ᵥ e⇓v , e'⇓v' , vs₃ , ts₃⇓vs₃ , v~v' =
-            f~f' (++-⊆ _ vs₂) x~x'
-       in ( v
-          , v'
-          , ts₃ ⧺ ts₂ ⧺ ts₁
-          ,ᵥ evalms-$ refl refl e₁⇓f e₂⇓x e⇓v
-          , eval-$ e₁'⇓f' e₂'⇓x' e'⇓v'
-          , vs₃ ⧺ vs₂ ⧺ vs₁
-          , ts⇓-join (ts⇓-join ts₁⇓vs₁ ts₂⇓vs₂)
-              (≅-subst (_⊢ts ts₃ ⇓ vs₃)
-                (≅-symmetric (≅-++-assoc vs₂ vs₁ envₜ)) ts₃⇓vs₃)
-          , ≅-subst (_⊨v v ~ v') (reassoc vs₃ vs₂ vs₁ envₜ) v~v'
-          )
 valueCorrectness ρₛ~ρ (≤-let e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-+ e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-CC e≤e') = {! !}
-valueCorrectness ρₛ~ρ ≤-λλ = {! !}
+valueCorrectness {offs = offs} ρₛ~ρ (≤-λλ {τ = τ} {τ' = τ'} e≤e')
+  with f , f' , ts ,ᵥ e⇓f , e'⇓f' , vs , ts⇓vs , f~f' ←
+    valueCorrectness ρₛ~ρ e≤e'
+  =
+  ( Code (_ => _) (Vₐ offs)
+  , f'
+  , λₐ {!!} {!!} {!!} ∷ ts
+  ,ᵥ {!!}
+  , e'⇓f'
+  , Closureₐ {!!} {!!} {!!} ∷ vs
+  , eval-cons refl ts⇓vs {!!}
+  , {!!}
+  , {!!}
+  , {!!})
 valueCorrectness ρₛ~ρ (≤-++ e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-$$ e≤e' e≤e'') = {! !}

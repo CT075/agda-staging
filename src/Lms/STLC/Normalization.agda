@@ -28,7 +28,6 @@ SNᵥ (Const x) = ⊤
 SNᵥ (Code τ p) = ⊤
 SNᵥ (Closure env body) = ∀ offs {x} → SNᵥ x → SN offs (cons x env) body
 
--- We can't define this as a record because it's non-positive.
 SN {τ = τ} offs env e =
   Σ[ v ∈ Val _ τ ](∃ᵥ[ ts ](env , offs ⊢ e ⇓[ ts , v ] × SNᵥ v))
 

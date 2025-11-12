@@ -73,6 +73,7 @@ data _≤_ : Tm _ τₛ Γₛ → Tm _ τₜ Γₜ → Set
     ∀ {τ τ'}
       {Γₛ : Ctx Staged n} {eₛ : Tm _ (Rep τ => Rep τ') Γₛ}
       {Γₜ : Ctx Base n} {eₜ : Tm _ (τ => τ') Γₜ} →
+    eₛ ≤ eₜ →
     λλ τ eₛ ≤ eₜ
   ≤-++ :
     ∀ {e₁ : Tm _ _ Γₛ} {e₂} {e₁' : Tm _ _ Γₜ} {e₂'} →
@@ -129,6 +130,6 @@ forget-≤ (e₁ $ e₂) = ≤-$ (forget-≤ e₁) (forget-≤ e₂)
 forget-≤ (Let e₁ e₂) = ≤-let (forget-≤ e₁) (forget-≤ e₂)
 forget-≤ (e₁ +' e₂) = ≤-+ (forget-≤ e₁) (forget-≤ e₂)
 forget-≤ (CC e) = ≤-CC (forget-≤ e)
-forget-≤ (λλ τ e) = ≤-λλ
+forget-≤ (λλ τ e) = ≤-λλ (forget-≤ e)
 forget-≤ (e₁ ++ e₂) = ≤-++ (forget-≤ e₁) (forget-≤ e₂)
 forget-≤ (e₁ $$ e₂) = ≤-$$ (forget-≤ e₁) (forget-≤ e₂)
