@@ -2,14 +2,17 @@ module Lms.STLC.Evaluation where
 
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
 open import Data.Vec as Vec using (Vec; _∷_; []) renaming (_++_ to _⧺_)
-open import Relation.Binary.PropositionalEquality using (_≡_)
+open import Data.Product as Prod
+open import Relation.Binary.PropositionalEquality using (_≡_; refl)
 
 open import Data.Store as Store using (Store; cons; nil; store-lookup-syntax)
+open import Data.Vec.Extensions
 
 open import Lms.STLC.Core
 open import Lms.STLC.IR as Anf hiding (Expr; Val; Env)
 
 private variable
+  T : Set
   n n' m m' m₁ m₂ m₃ i : ℕ
   w : W
 
@@ -124,3 +127,69 @@ data _,_⊢_⇓[_,_] : ∀{τ} {Γ : Ctx Staged n} →
 _,_⊢p_⇓_ : ∀{Γ : Ctx Staged n} {τ} →
   Env Γ → ℕ → Tm Staged (Rep τ) Γ → Anf.Prog → Set
 env , offs ⊢p e ⇓ [ ts , v ] = env , offs ⊢ e ⇓[ ts , Code _ v ]
+
+-- XXX: maybe move this to Data.Vec.Extensions?
+⧺-subst₂ :
+  ∀ {ts₁ ts₁' : Vec T m₁} {ts₂ ts₂' : Vec T m₂} →
+  ts₁ ≅ ts₁' → ts₂ ≅ ts₂' →
+  ts₂ ⧺ ts₁ ≅ ts₂' ⧺ ts₁'
+⧺-subst₂ {ts₁ = ts₁} {ts₁'} {ts₂} {ts₂'} ts₁≅ts₁' ts₂≅ts₂' = begin
+  ts₂ ⧺ ts₁ ≅⟨ ≅-cong (ts₂ ⧺_) ts₁≅ts₁' ⟩
+  ts₂ ⧺ ts₁' ≅⟨ ≅-cong (_⧺ ts₁') ts₂≅ts₂' ⟩
+  ts₂' ⧺ ts₁' ∎
+  where
+    open ≅-Reasoning
+
+evalms-unique :
+  ∀ {Γ : Ctx Staged n} {τ} {env : Env Γ} {e : Tm _ τ Γ}
+    {ts₁ : Vec Anf.Expr m₁} {ts₂ : Vec Anf.Expr m₂} {v₁ v₂ offs} →
+  env , offs ⊢ e ⇓[ ts₁ , v₁ ] →
+  env , offs ⊢ e ⇓[ ts₂ , v₂ ] →
+  ts₁ ≅ ts₂ × v₁ ≡ v₂
+evalms-unique (evalms-C x) (evalms-C .x) = ≅-nil , refl
+evalms-unique (evalms-V env[i]↦v₁) (evalms-V env[i]↦v₂) =
+  ≅-nil , Store.[]↦-unique env[i]↦v₁ env[i]↦v₂
+evalms-unique (evalms-λ env e) (evalms-λ .env .e) = ≅-nil , refl
+evalms-unique
+  (evalms-$ refl refl e₁⇓ e₂⇓ body⇓) (evalms-$ refl refl e₁⇓' e₂⇓' body⇓')
+  with ts₁≅ts₁' , refl ← evalms-unique e₁⇓ e₁⇓'
+  with refl ← ≅-len ts₁≅ts₁'
+  with ts₂≅ts₂' , refl ← evalms-unique e₂⇓ e₂⇓'
+  with refl ← ≅-len ts₂≅ts₂'
+  with ts₃≅ts₃' , refl ← evalms-unique body⇓ body⇓'
+  with refl ← ≅-len ts₃≅ts₃' =
+    ⧺-subst₂ (⧺-subst₂ ts₁≅ts₁' ts₂≅ts₂') ts₃≅ts₃' , refl
+evalms-unique (evalms-let refl e₁⇓ e₂⇓) (evalms-let refl e₁⇓' e₂⇓')
+  with ts₁≅ts₁' , refl ← evalms-unique e₁⇓ e₁⇓'
+  with refl ← ≅-len ts₁≅ts₁'
+  with ts₂≅ts₂' , refl ← evalms-unique e₂⇓ e₂⇓'
+  with refl ← ≅-len ts₂≅ts₂' =
+    ⧺-subst₂ ts₁≅ts₁' ts₂≅ts₂' , refl
+evalms-unique (evalms-+ refl refl e₁⇓ e₂⇓) (evalms-+ refl refl e₁⇓' e₂⇓')
+  with ts₁≅ts₁' , refl ← evalms-unique e₁⇓ e₁⇓'
+  with refl ← ≅-len ts₁≅ts₁'
+  with ts₂≅ts₂' , refl ← evalms-unique e₂⇓ e₂⇓'
+  with refl ← ≅-len ts₂≅ts₂' =
+    ⧺-subst₂ ts₁≅ts₁' ts₂≅ts₂' , refl
+evalms-unique (evalms-CC e⇓) (evalms-CC e⇓')
+  with ts≅ts' , refl ← evalms-unique e⇓ e⇓' =
+    ts≅ts' , refl
+evalms-unique (evalms-λλ refl e⇓ body⇓) (evalms-λλ refl e⇓' body⇓')
+  with ts≅ts' , refl ← evalms-unique e⇓ e⇓'
+  with refl ← ≅-len ts≅ts'
+  with tsᵢ≅tsᵢ' , refl ← evalms-unique body⇓ body⇓'
+  with refl ← ≅-len tsᵢ≅tsᵢ'
+  with refl ← ≅⇒≡ tsᵢ≅tsᵢ' =
+    ≅-cons ts≅ts' , refl
+evalms-unique (evalms-++ refl refl e₁⇓ e₂⇓) (evalms-++ refl refl e₁⇓' e₂⇓')
+  with ts₁≅ts₁' , refl ← evalms-unique e₁⇓ e₁⇓'
+  with refl ← ≅-len ts₁≅ts₁'
+  with ts₂≅ts₂' , refl ← evalms-unique e₂⇓ e₂⇓'
+  with refl ← ≅-len ts₂≅ts₂' =
+    ≅-cons (⧺-subst₂ ts₁≅ts₁' ts₂≅ts₂') , refl
+evalms-unique (evalms-$$ refl refl e₁⇓ e₂⇓) (evalms-$$ refl refl e₁⇓' e₂⇓')
+  with ts₁≅ts₁' , refl ← evalms-unique e₁⇓ e₁⇓'
+  with refl ← ≅-len ts₁≅ts₁'
+  with ts₂≅ts₂' , refl ← evalms-unique e₂⇓ e₂⇓'
+  with refl ← ≅-len ts₂≅ts₂' =
+    ≅-cons (⧺-subst₂ ts₁≅ts₁' ts₂≅ts₂') , refl

@@ -7,7 +7,6 @@ open import Data.Product as Prod
 open import Data.Unit as Unit using (⊤; tt)
 open import Data.Empty as Void
 open import Relation.Binary.PropositionalEquality using (refl; _≡_)
-open import Relation.Nullary.Decidable using (yes; no)
 
 open import Data.Product.Extensions
 open import Data.Vec.Extensions
@@ -24,22 +23,33 @@ private variable
   w : W
   n n' n₁ n₂ m m' offs i : ℕ
 
-_≈_ : ∀{τ} → Val Base τ → Anf.Val → Set
-
-_≈_ (Const x) (Constₐ x') = x ≡ x'
-_≈_ (Const _) (Closureₐ _ _ _) = ⊥
-_≈_ (Closure _ _) (Constₐ _) = ⊥
-_≈_ {τ => τ'} (Closure env e) (Closureₐ vs ts a) =
-  ∀ {x : Val Base τ} {v : Val Base τ'}
-    {x' : Anf.Val} {v' : Anf.Val} {vs' : Anf.Env _} →
+infix 4 _⊨_≈_
+_⊨_≈_ : ∀{τ} → Anf.Env offs → Val Base τ → Anf.Val → Set
+_⊨_≈_ envₜ (Const x) (Constₐ x') = x ≡ x'
+_⊨_≈_ envₜ (Const _) (Closureₐ _ _ _) = ⊥
+_⊨_≈_ envₜ (Closure _ _) (Constₐ _) = ⊥
+_⊨_≈_ {τ = τ => τ'} envₜ (Closure env e) (Closureₐ vs ts a) =
+  ∀ {n} {x : Val Base τ} {x' : Anf.Val} {env' : Anf.Env n} {p} →
+  envₜ ⊆ env' →
   -- Given related inputs...
-  x ≈ x' →
-  -- If the surface-lang closure evaluates to v...
-  cons x env ⊢ e ⇓ v →
-  -- And the IR closure evaluates to v'...
-  x' ∷ vs ⊢ts ts ⇓ vs' → vs' ⧺ x' ∷ vs ⊢v a ⇓ v' →
-  -- Then v and v' are related.
-  v ≈ v'
+  env' ⊨ x ≈ x' →
+  -- ...and some quoted code producing said input...
+  env' ⊢v p ⇓ x' →
+  Σ[ v ∈ Val Base τ' ](Σ[ v' ∈ Anf.Val ](Σ[ vs' ∈ Anf.Env _ ]
+    -- Then the upper closure produces v,
+    ( cons x env ⊢ e ⇓ v
+    -- the IR closure produces v',
+    × x' ∷ vs ⊢ts ts ⇓ vs' × vs' ⧺ x' ∷ vs ⊢v a ⇓ v'
+    -- and v and v' are related.
+    × env' ⊨ v ≈ v')))
+
+wk-≈ : ∀{τ} {envₜ : Anf.Env offs} {v : Val Base τ} {v' : Anf.Val} x →
+  envₜ ⊨ v ≈ v' →
+  x ∷ envₜ ⊨ v ≈ v'
+wk-≈ {v = Const x} {Constₐ .x} _ refl = refl
+wk-≈ {v = Closure env e} {Closureₐ vs ts a} _ v≈v' =
+  λ t∷envₜ⊆env' x≈x' p⇓x' →
+    v≈v' (⊆-uncons t∷envₜ⊆env') x≈x' p⇓x'
 
 infix 4 _⊨v_~_ _⊨e⟨_,_⟩~⟨_,_⟩ _⊨ρ_~_
 _⊨v_~_ : ∀{τ τ'} →
@@ -57,7 +67,7 @@ envₜ ⊨v eₛ@(Closure {τ₁ = τ} envₛ e) ~ Closure {τ₁ = τ'} envₛ'
   SNᵥ eₛ ×
   ∀ {offs} {env : Anf.Env offs} {x : Val _ τ} {x' : Val _ τ'} →
   envₜ ⊆ env → env ⊨v x ~ x' → env ⊨e⟨ cons x envₛ , e ⟩~⟨ cons x' envₛ' , e' ⟩
-envₜ ⊨v Code τ p ~ v' = ∃[ v ] (envₜ ⊢v p ⇓ v × v' ≈ v)
+envₜ ⊨v Code τ p ~ v' = ∃[ v ] (envₜ ⊢v p ⇓ v × envₜ ⊨ v' ≈ v)
 
 _⊨e⟨_,_⟩~⟨_,_⟩ {offs = offs} envₜ envₛ e envₛ' e' =
   ∃[ v ](∃[ v' ](∃ᵥ[ ts ](
@@ -99,7 +109,7 @@ wk-v~ {v = Const x} {Const .x} _ refl = refl
 wk-v~ {v = Closure envₛ eₛ} {Closure env e} _ (SN[v] , IH) =
   SN[v] , λ x∷env'⊆env x~x' → IH (⊆-uncons x∷env'⊆env) x~x'
 wk-v~ {v = Code τ p} {v'} _ (v , env⊢p⇓v , v'≈v) =
-  v , wk-v⇓ _ env⊢p⇓v , v'≈v
+  v , wk-v⇓ _ env⊢p⇓v , wk-≈ _ v'≈v
 
 wk-ρ~ :
   ∀ {Γ : Ctx Staged n} {Γ' : Ctx Base n}
@@ -145,35 +155,6 @@ ctx-env-lookup (cons x _) here = x , Store.here
 ctx-env-lookup (cons _ env) (there Γ[i]=τ) =
   let x , p = ctx-env-lookup env Γ[i]=τ
    in x , Store.there p
-
-module EvalRel where
-  record T
-      (envₜ : Anf.Env offs)
-      {Γ : Ctx Staged n} {τ} (e : Tm _ τ Γ) (envₛ : Env Γ)
-      {Γ' : Ctx Base n} {τ'} (e' : Tm _ τ' Γ') (env : Env Γ') : Set
-    where
-    constructor Mk
-    field
-      v : Val Staged τ
-      v' : Val Base τ'
-      {len} : ℕ
-      ts : Vec Anf.Expr len
-      envₛ,offs⊢e⇓[ts,v] : envₛ , offs ⊢ e ⇓[ ts , v ]
-      envₛ'⊢e'⇓v' : env ⊢ e' ⇓ v'
-      vs : Anf.Env len
-      envₜ⊢ts⇓vs : envₜ ⊢ts ts ⇓ vs
-      vs⧺envₜ⊨v~v' : vs ⧺ envₜ ⊨v v ~ v'
-
-  open T public
-
-  wrap :
-    ∀ {envₜ : Anf.Env offs}
-      {Γ : Ctx Staged n} {τ} {e : Tm _ τ Γ} {envₛ : Env Γ}
-      {Γ' : Ctx Base n} {τ'} {e' : Tm _ τ' Γ'} {env : Env Γ'} →
-    envₜ ⊨e⟨ envₛ , e ⟩~⟨ env , e' ⟩ →
-    T envₜ e envₛ e' env
-  wrap (v , v' , ts ,ᵥ e⇓ , e'⇓ , vs , ts⇓ , v~v') =
-    Mk v v' ts e⇓ e'⇓ vs ts⇓ v~v'
 
 valueCorrectness :
   ∀ {Γ : Ctx Staged n} {τ} {e : Tm _ τ Γ} {envₛ : Env Γ}
@@ -238,19 +219,48 @@ valueCorrectness {envₜ = envₜ} ρₛ~ρ (≤-$ e₁≤e₁' e₂≤e₂')
 valueCorrectness ρₛ~ρ (≤-let e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-+ e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-CC e≤e') = {! !}
-valueCorrectness {offs = offs} ρₛ~ρ (≤-λλ {τ = τ} {τ' = τ'} e≤e')
+valueCorrectness {offs = offs} {e = λλ τ e} {envₛ} {env = env} {envₜ}
+  ρₛ~ρ (≤-λλ {τ = τ} {τ' = τ'} e≤e')
   with f , f' , ts ,ᵥ e⇓f , e'⇓f' , vs , ts⇓vs , f~f' ←
     valueCorrectness ρₛ~ρ e≤e'
-  =
-  ( Code (_ => _) (Vₐ offs)
-  , f'
-  , λₐ {!!} {!!} {!!} ∷ ts
-  ,ᵥ {!!}
+  with fSN , (_,ᵥ_ {len = len} tsSN (e⇓SN[ts,f] , SN[f])) ←
+    strongNormalization (ρ~⇒⊨ ρₛ~ρ) offs e
+  with ts≅tsSN , refl ← evalms-unique e⇓f e⇓SN[ts,f]
+  with refl ← ≅-len ts≅tsSN
+  with refl ← ≅⇒≡ ts≅tsSN
+  with Closure envₛ eₛ ← f
+  with Closure envᵢ eᵢ ← f'
+  with _ , IH-body ← f~f'
+  with Code _ catom , cbody ,ᵥ cbody⇓ , tt ←
+    SN[f] (suc (len + offs)) {Code _ (Vₐ (len + offs))} tt
+  using envₜ' ← vs ⧺ envₜ
+  using clo ← Closureₐ envₜ' cbody catom =
+  ( Code (_ => _) (Vₐ (len + offs))
+  , Closure envᵢ eᵢ
+  , λₐ τ cbody catom ∷ ts
+  ,ᵥ evalms-λλ refl e⇓f cbody⇓
   , e'⇓f'
-  , Closureₐ {!!} {!!} {!!} ∷ vs
-  , eval-cons refl ts⇓vs {!!}
-  , {!!}
-  , {!!}
-  , {!!})
+  , clo ∷ vs
+  , eval-cons refl ts⇓vs Anf.eval-λ
+  , clo
+  , Anf.eval-v here
+  , inner)
+  where
+    inner :
+      ∀ {n} {x : Val Base τ} {x' : Anf.Val} {env' : Anf.Env n} {p} →
+      (clo ∷ envₜ') ⊆ env' →
+      env' ⊨ x ≈ x' →
+      env' ⊢v p ⇓ x' →
+      Σ[ v ∈ Val Base τ' ](Σ[ v' ∈ Anf.Val ](Σ[ vs' ∈ Anf.Env _ ]
+        ( cons x envᵢ ⊢ eᵢ ⇓ v
+        × x' ∷ envₜ' ⊢ts cbody ⇓ vs'
+        × vs' ⧺ x' ∷ envₜ' ⊢v catom ⇓ v'
+        × env' ⊨ v ≈ v')))
+    inner {x = x} {x'} {env'} {p} clo∷envₜ⊆env' x≈x' p⇓x'
+      using p~x ← x' , p⇓x' , x≈x'
+      with Code τ' p' , v'' , ts' ,ᵥ eₛ⇓ , eᵢ⇓v'' , vs'' , ts'⇓vs'' , p'~v'' ←
+        IH-body {x = Code τ p} {x' = x} (⊆-uncons clo∷envₜ⊆env') p~x
+      with v''' , p'⇓v''' , v''≈v''' ← p'~v'' =
+      v'' , v''' , {!!} , eᵢ⇓v'' , {!!} , {!!} , {! v''≈v''' !}
 valueCorrectness ρₛ~ρ (≤-++ e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-$$ e≤e' e≤e'') = {! !}

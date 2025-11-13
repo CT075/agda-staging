@@ -16,7 +16,7 @@ open import Lms.STLC.IR as Anf hiding (Val; Env)
 open import Lms.STLC.Evaluation
 
 private variable
-  n n₁ n₂ i : ℕ
+  n n' n₁ n₂ i offs m : ℕ
   τ τ' : Typ Staged
   Γ : Ctx Staged n
   env : Env Γ
