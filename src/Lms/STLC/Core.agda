@@ -23,10 +23,6 @@ data Typ : W → Set where
   _=>_ : Typ w → Typ w → Typ w
   Rep : Typ Base → Typ Staged
 
-data IsBase : Typ Base → Typ Staged → Set where
-  base-N : IsBase N N
-  base-=> : ∀{A A' B B'} → IsBase A A' → IsBase B B' → IsBase (A => B) (A' => B')
-
 Ctx : W → ℕ → Set
 Ctx w = Context.Ctx (Typ w)
 
@@ -48,10 +44,8 @@ data Tm : (w : W) → {n : ℕ} → Typ w → Ctx w n → Set where
   _+'_ : ∀{Γ : Ctx w n} → Tm w N Γ → Tm w N Γ → Tm w N Γ
 
   CC : ∀{Γ} → Tm Staged N Γ → Tm Staged {n} (Rep N) Γ
-  {-
-  λλ : ∀ τ₁ {τ₂ bτ₁ bτ₂} {Γ : Ctx Staged n} → {IsBase bτ₁ τ₁} → {IsBase bτ₂ τ₂} →
-    Tm Staged (τ₁ => τ₂) Γ → Tm Staged (Rep (bτ₁ => bτ₂)) Γ
-    -}
+  λλ : ∀ τ₁ {τ₂} {Γ : Ctx Staged n} →
+    Tm Staged (Rep τ₁ => Rep τ₂) Γ → Tm Staged (Rep (τ₁ => τ₂)) Γ
   _++_ : ∀{Γ : Ctx Staged n} →
     Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ → Tm Staged (Rep N) Γ
   _$$_ : ∀{τ₁ τ₂} {Γ : Ctx Staged n} →

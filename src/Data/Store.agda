@@ -1,6 +1,9 @@
 module Data.Store where
 
 open import Data.Nat
+open import Data.Nat.Properties
+open import Data.Empty as Void
+open import Relation.Binary.PropositionalEquality using (refl; _≡_)
 open import Level renaming (suc to lsuc; zero to lzero)
 
 open import Data.Context renaming (here to chere; there to cthere)
@@ -15,6 +18,7 @@ data Store (Typ : Set ℓ) (Val : Typ → Set ℓ) : Ctx Typ n → Set ℓ where
   nil : Store Typ Val []
   cons : ∀{t} {Γ : Ctx Typ n} → Val t → Store Typ Val Γ → Store Typ Val (t ∷ Γ)
 
+-- This can't be defined as `env[i]↦v∈τ` directly because `v` depends on `τ`.
 data MapsTo {Typ : Set ℓ} {Val : Typ → Set ℓ} : {Γ : Ctx Typ n} →
   Store Typ Val Γ → ℕ → (τ : Typ) → Val τ → Set ℓ
   where
@@ -27,8 +31,24 @@ data MapsTo {Typ : Set ℓ} {Val : Typ → Set ℓ} : {Γ : Ctx Typ n} →
 store-lookup-syntax = MapsTo
 syntax store-lookup-syntax env i τ v = env [ i ]↦ v ∈ τ
 
-store-typing : ∀{Typ : Set ℓ} {Val} {Γ : Ctx Typ n}
-  {env : Store Typ Val Γ} {i τ v} →
+store-typing :
+  ∀ {Typ : Set ℓ} {Val} {Γ : Ctx Typ n} {env : Store Typ Val Γ} {i τ v} →
   env [ i ]↦ v ∈ τ → Γ [ i ]= τ
 store-typing here = chere
 store-typing (there env[i]↦v) = cthere (store-typing env[i]↦v)
+
+
+[]↦→< :
+  ∀ {Typ : Set ℓ} {Val} {Γ : Ctx Typ n} {env : Store Typ Val Γ} {i τ v} →
+  env [ i ]↦ v ∈ τ → i < n
+[]↦→< here = n<1+n _
+[]↦→< (there p) = m<n⇒m<1+n ([]↦→< p)
+
+[]↦-unique :
+  ∀ {Typ : Set ℓ} {Val} {Γ : Ctx Typ n} {env : Store Typ Val Γ} {i τ v₁ v₂} →
+  env [ i ]↦ v₁ ∈ τ → env [ i ]↦ v₂ ∈ τ → v₁ ≡ v₂
+[]↦-unique here here = refl
+[]↦-unique here (there p) = ⊥-elim (<-irrefl refl ([]↦→< p))
+[]↦-unique (there p) here = ⊥-elim (<-irrefl refl ([]↦→< p))
+[]↦-unique (there p₁) (there p₂) = []↦-unique p₁ p₂
+
