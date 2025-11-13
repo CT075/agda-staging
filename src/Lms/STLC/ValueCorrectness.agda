@@ -23,33 +23,22 @@ private variable
   w : W
   n n' n₁ n₂ m m' offs i : ℕ
 
-infix 4 _⊨_≈_
-_⊨_≈_ : ∀{τ} → Anf.Env offs → Val Base τ → Anf.Val → Set
-_⊨_≈_ envₜ (Const x) (Constₐ x') = x ≡ x'
-_⊨_≈_ envₜ (Const _) (Closureₐ _ _ _) = ⊥
-_⊨_≈_ envₜ (Closure _ _) (Constₐ _) = ⊥
-_⊨_≈_ {τ = τ => τ'} envₜ (Closure env e) (Closureₐ vs ts a) =
-  ∀ {n} {x : Val Base τ} {x' : Anf.Val} {env' : Anf.Env n} {p} →
-  envₜ ⊆ env' →
+infix 4 _≈_
+_≈_ : ∀{τ} → Val Base τ → Anf.Val → Set
+_≈_ (Const x) (Constₐ x') = x ≡ x'
+_≈_ (Const _) (Closureₐ _ _ _) = ⊥
+_≈_ (Closure _ _) (Constₐ _) = ⊥
+_≈_ {τ = τ => τ'} (Closure env e) (Closureₐ vs ts a) =
+  ∀ {x : Val Base τ} {x' : Anf.Val} →
   -- Given related inputs...
-  env' ⊨ x ≈ x' →
-  -- ...and some quoted code producing said input...
-  env' ⊢v p ⇓ x' →
+  x ≈ x' →
   Σ[ v ∈ Val Base τ' ](Σ[ v' ∈ Anf.Val ](Σ[ vs' ∈ Anf.Env _ ]
     -- Then the upper closure produces v,
     ( cons x env ⊢ e ⇓ v
     -- the IR closure produces v',
     × x' ∷ vs ⊢ts ts ⇓ vs' × vs' ⧺ x' ∷ vs ⊢v a ⇓ v'
     -- and v and v' are related.
-    × env' ⊨ v ≈ v')))
-
-wk-≈ : ∀{τ} {envₜ : Anf.Env offs} {v : Val Base τ} {v' : Anf.Val} x →
-  envₜ ⊨ v ≈ v' →
-  x ∷ envₜ ⊨ v ≈ v'
-wk-≈ {v = Const x} {Constₐ .x} _ refl = refl
-wk-≈ {v = Closure env e} {Closureₐ vs ts a} _ v≈v' =
-  λ t∷envₜ⊆env' x≈x' p⇓x' →
-    v≈v' (⊆-uncons t∷envₜ⊆env') x≈x' p⇓x'
+    × v ≈ v')))
 
 infix 4 _⊨v_~_ _⊨e⟨_,_⟩~⟨_,_⟩ _⊨ρ_~_
 _⊨v_~_ : ∀{τ τ'} →
@@ -67,7 +56,7 @@ envₜ ⊨v eₛ@(Closure {τ₁ = τ} envₛ e) ~ Closure {τ₁ = τ'} envₛ'
   SNᵥ eₛ ×
   ∀ {offs} {env : Anf.Env offs} {x : Val _ τ} {x' : Val _ τ'} →
   envₜ ⊆ env → env ⊨v x ~ x' → env ⊨e⟨ cons x envₛ , e ⟩~⟨ cons x' envₛ' , e' ⟩
-envₜ ⊨v Code τ p ~ v' = ∃[ v ] (envₜ ⊢v p ⇓ v × envₜ ⊨ v' ≈ v)
+envₜ ⊨v Code τ p ~ v' = ∃[ v ] (envₜ ⊢v p ⇓ v × v' ≈ v)
 
 _⊨e⟨_,_⟩~⟨_,_⟩ {offs = offs} envₜ envₛ e envₛ' e' =
   ∃[ v ](∃[ v' ](∃ᵥ[ ts ](
@@ -109,7 +98,7 @@ wk-v~ {v = Const x} {Const .x} _ refl = refl
 wk-v~ {v = Closure envₛ eₛ} {Closure env e} _ (SN[v] , IH) =
   SN[v] , λ x∷env'⊆env x~x' → IH (⊆-uncons x∷env'⊆env) x~x'
 wk-v~ {v = Code τ p} {v'} _ (v , env⊢p⇓v , v'≈v) =
-  v , wk-v⇓ _ env⊢p⇓v , wk-≈ _ v'≈v
+  v , wk-v⇓ _ env⊢p⇓v , v'≈v
 
 wk-ρ~ :
   ∀ {Γ : Ctx Staged n} {Γ' : Ctx Base n}
@@ -216,7 +205,7 @@ valueCorrectness {envₜ = envₜ} ρₛ~ρ (≤-$ e₁≤e₁' e₂≤e₂')
       (xs ⧺ ys ⧺ zs) ⧺ ws ∎
       where
         open ≅-Reasoning
-valueCorrectness ρₛ~ρ (≤-let e≤e' e≤e'') = {! !}
+valueCorrectness ρₛ~ρ (≤-let e₁≤e₁' e₂≤e₂') = {! !}
 valueCorrectness ρₛ~ρ (≤-+ e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-CC e≤e') = {! !}
 valueCorrectness {offs = offs} {e = λλ τ e} {envₛ} {env = env} {envₜ}
@@ -246,21 +235,23 @@ valueCorrectness {offs = offs} {e = λλ τ e} {envₛ} {env = env} {envₜ}
   , Anf.eval-v here
   , inner)
   where
-    inner :
-      ∀ {n} {x : Val Base τ} {x' : Anf.Val} {env' : Anf.Env n} {p} →
-      (clo ∷ envₜ') ⊆ env' →
-      env' ⊨ x ≈ x' →
-      env' ⊢v p ⇓ x' →
-      Σ[ v ∈ Val Base τ' ](Σ[ v' ∈ Anf.Val ](Σ[ vs' ∈ Anf.Env _ ]
-        ( cons x envᵢ ⊢ eᵢ ⇓ v
-        × x' ∷ envₜ' ⊢ts cbody ⇓ vs'
-        × vs' ⧺ x' ∷ envₜ' ⊢v catom ⇓ v'
-        × env' ⊨ v ≈ v')))
-    inner {x = x} {x'} {env'} {p} clo∷envₜ⊆env' x≈x' p⇓x'
-      using p~x ← x' , p⇓x' , x≈x'
-      with Code τ' p' , v'' , ts' ,ᵥ eₛ⇓ , eᵢ⇓v'' , vs'' , ts'⇓vs'' , p'~v'' ←
-        IH-body {x = Code τ p} {x' = x} (⊆-uncons clo∷envₜ⊆env') p~x
-      with v''' , p'⇓v''' , v''≈v''' ← p'~v'' =
-      v'' , v''' , {!!} , eᵢ⇓v'' , {!!} , {!!} , {! v''≈v''' !}
+    inner : ∀{x : Val Base τ} {x' : Anf.Val} →
+      x ≈ x' →
+      Σ[ v ∈ Val Base τ' ](Σ[ v' ∈ Anf.Val ](Σ[ vs' ∈ Anf.Env _ ](
+        cons x envᵢ ⊢ eᵢ ⇓ v ×
+        x' ∷ envₜ' ⊢ts cbody ⇓ vs' ×
+        vs' ⧺ x' ∷ envₜ' ⊢v catom ⇓ v' ×
+        v ≈ v')))
+    inner {x = x} {x' = x'} x≈x'
+      using V[offs']~x ← x' , eval-v here , x≈x'
+      with Code τ' p , v' , ts' ,ᵥ eₛ⇓ , eᵢ⇓v' , vs' , ts'⇓vs' , p~v' ←
+        IH-body
+          {x = Code τ (Vₐ (len + offs))}
+          (⊆-cons x' (⊆-refl envₜ')) V[offs']~x
+      with v'' , p⇓v'' , v'≈v'' ← p~v'
+      with cbody≅ts' , refl ← evalms-unique cbody⇓ eₛ⇓
+      with refl ← ≅-len cbody≅ts'
+      with refl ← ≅⇒≡ cbody≅ts' =
+      v' , v'' ,  vs' , eᵢ⇓v' , ts'⇓vs' , p⇓v'' , v'≈v''
 valueCorrectness ρₛ~ρ (≤-++ e≤e' e≤e'') = {! !}
 valueCorrectness ρₛ~ρ (≤-$$ e≤e' e≤e'') = {! !}
