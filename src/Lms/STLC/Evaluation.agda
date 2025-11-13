@@ -128,6 +128,25 @@ _,_⊢p_⇓_ : ∀{Γ : Ctx Staged n} {τ} →
   Env Γ → ℕ → Tm Staged (Rep τ) Γ → Anf.Prog → Set
 env , offs ⊢p e ⇓ [ ts , v ] = env , offs ⊢ e ⇓[ ts , Code _ v ]
 
+eval-unique : ∀ {Γ : Ctx Base n} {τ} {env : Env Γ} {e : Tm _ τ Γ} {v₁ v₂} →
+  env ⊢ e ⇓ v₁ →
+  env ⊢ e ⇓ v₂ →
+  v₁ ≡ v₂
+eval-unique (eval-C x) (eval-C .x) = refl
+eval-unique (eval-V env[i]↦v₁) (eval-V env[i]↦v₂) =
+  Store.[]↦-unique env[i]↦v₁ env[i]↦v₂
+eval-unique (eval-λ env e) (eval-λ .env .e) = refl
+eval-unique (eval-$ e₁⇓ e₂⇓ body⇓) (eval-$ e₁⇓' e₂⇓' body⇓')
+  with refl ← eval-unique e₁⇓ e₁⇓'
+  with refl ← eval-unique e₂⇓ e₂⇓'
+  with refl ← eval-unique body⇓ body⇓' = refl
+eval-unique (eval-let e₁⇓v₁ e₂⇓v₂) (eval-let e₁⇓v₁' e₂⇓v₂')
+  with refl ← eval-unique e₁⇓v₁ e₁⇓v₁'
+  with refl ← eval-unique e₂⇓v₂ e₂⇓v₂' = refl
+eval-unique (eval-+ refl e₁⇓x₁ e₂⇓x₂) (eval-+ refl e₁⇓x₁' e₂⇓x₂')
+  with refl ← eval-unique e₁⇓x₁ e₁⇓x₁'
+  with refl ← eval-unique e₂⇓x₂ e₂⇓x₂' = refl
+
 -- XXX: maybe move this to Data.Vec.Extensions?
 ⧺-subst₂ :
   ∀ {ts₁ ts₁' : Vec T m₁} {ts₂ ts₂' : Vec T m₂} →

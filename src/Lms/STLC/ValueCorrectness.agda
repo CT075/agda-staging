@@ -145,15 +145,15 @@ ctx-env-lookup (cons _ env) (there Γ[i]=τ) =
   let x , p = ctx-env-lookup env Γ[i]=τ
    in x , Store.there p
 
-valueCorrectness :
+fundamental :
   ∀ {Γ : Ctx Staged n} {τ} {e : Tm _ τ Γ} {envₛ : Env Γ}
     {Γ' : Ctx Base n} {τ'} {e' : Tm _ τ' Γ'} {env : Env Γ'}
     {envₜ : Anf.Env offs} →
   envₜ ⊨ρ envₛ ~ env → e ≤ e' →
   envₜ ⊨e⟨ envₛ , e ⟩~⟨ env , e' ⟩
-valueCorrectness ρₛ~ρ (≤-C x) =
+fundamental ρₛ~ρ (≤-C x) =
   Const x , Const x , [] ,ᵥ evalms-C x , eval-C x , [] , eval-nil , refl
-valueCorrectness ρₛ~ρ (≤-V i Γₛ[i]=τ Γ[i]=τ' _) =
+fundamental ρₛ~ρ (≤-V i Γₛ[i]=τ Γ[i]=τ' _) =
   let v , v' , envₛ[i]↦v , env[i]↦v' , v~v' =
         ~-lookup ρₛ~ρ Γₛ[i]=τ Γ[i]=τ'
    in ( v
@@ -164,7 +164,7 @@ valueCorrectness ρₛ~ρ (≤-V i Γₛ[i]=τ Γ[i]=τ' _) =
       , []
       , eval-nil
       , v~v')
-valueCorrectness {envₛ = envₛ} {env = env}
+fundamental {envₛ = envₛ} {env = env}
     ρₛ~ρ (≤-λ {eₛ = e} {eₜ = e'} _ e≤e') =
   ( Closure envₛ e
   , Closure env e'
@@ -174,12 +174,12 @@ valueCorrectness {envₛ = envₛ} {env = env}
   , []
   , eval-nil
   , (λ offs SN[x] → strongNormalization (models-cons SN[x] (ρ~⇒⊨ ρₛ~ρ)) offs e)
-  , λ ρₜ⊆ρ x~x' → valueCorrectness (~-cons x~x' (extend-ρ~ ρₜ⊆ρ ρₛ~ρ)) e≤e')
-valueCorrectness {envₜ = envₜ} ρₛ~ρ (≤-$ e₁≤e₁' e₂≤e₂')
+  , λ ρₜ⊆ρ x~x' → fundamental (~-cons x~x' (extend-ρ~ ρₜ⊆ρ ρₛ~ρ)) e≤e')
+fundamental {envₜ = envₜ} ρₛ~ρ (≤-$ e₁≤e₁' e₂≤e₂')
   with f , f' , ts₁ ,ᵥ e₁⇓f , e₁'⇓f' , vs₁ , ts₁⇓vs₁ , f~f' ←
-    valueCorrectness ρₛ~ρ e₁≤e₁'
+    fundamental ρₛ~ρ e₁≤e₁'
   with x , x' , ts₂ ,ᵥ e₂⇓x , e₂'⇓x' , vs₂ , ts₂⇓vs₂ , x~x' ←
-    valueCorrectness (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂'
+    fundamental (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂'
   with f | f' | f~f'
 ... | Closure _ _ | Closure _ _ | (_ , IH) =
     let v , v' , ts₃ ,ᵥ e⇓v , e'⇓v' , vs₃ , ts₃⇓vs₃ , v~v' =
@@ -205,13 +205,51 @@ valueCorrectness {envₜ = envₜ} ρₛ~ρ (≤-$ e₁≤e₁' e₂≤e₂')
       (xs ⧺ ys ⧺ zs) ⧺ ws ∎
       where
         open ≅-Reasoning
-valueCorrectness ρₛ~ρ (≤-let e₁≤e₁' e₂≤e₂') = {! !}
-valueCorrectness ρₛ~ρ (≤-+ e≤e' e≤e'') = {! !}
-valueCorrectness ρₛ~ρ (≤-CC e≤e') = {! !}
-valueCorrectness {offs = offs} {e = λλ τ e} {envₛ} {env = env} {envₜ}
+fundamental {envₜ = envₜ} ρₛ~ρ (≤-let e₁≤e₁' e₂≤e₂')
+  with x₁ , x₁' , ts₁ ,ᵥ e₁⇓x₁ , e₁'⇓x₁' , vs₁ , ts₁⇓vs₁ , x₁~x₁' ←
+    fundamental ρₛ~ρ e₁≤e₁'
+  with x₂ , x₂' , ts₂ ,ᵥ e₂⇓x₂ , e₂'⇓x₂' , vs₂ , ts₂⇓vs₂ , x₂~x₂' ←
+    fundamental (~-cons x₁~x₁' (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ)) e₂≤e₂' =
+  ( x₂
+  , x₂'
+  , ts₂ ⧺ ts₁
+  ,ᵥ evalms-let refl e₁⇓x₁ e₂⇓x₂
+  , eval-let e₁'⇓x₁' e₂'⇓x₂'
+  , vs₂ ⧺ vs₁
+  , ts⇓-join ts₁⇓vs₁ ts₂⇓vs₂
+  , ≅-subst (_⊨v x₂ ~ x₂') (≅-symmetric (≅-++-assoc vs₂ vs₁ envₜ)) x₂~x₂'
+  )
+fundamental {envₜ = envₜ} ρₛ~ρ (≤-+ e₁≤e₁' e₂≤e₂')
+  with Const x₁ , Const x₁' , ts₁ ,ᵥ e₁⇓x₁ , e₁'⇓x₁' , vs₁ , ts₁⇓vs₁ , refl ←
+    fundamental ρₛ~ρ e₁≤e₁'
+  with Const x₂ , Const x₂' , ts₂ ,ᵥ e₂⇓x₂ , e₂'⇓x₂' , vs₂ , ts₂⇓vs₂ , refl ←
+    fundamental (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂' =
+  ( Const (x₁ + x₂)
+  , Const (x₁' + x₂')
+  , ts₂ ⧺ ts₁
+  ,ᵥ evalms-+ refl refl e₁⇓x₁ e₂⇓x₂
+  , eval-+ refl e₁'⇓x₁' e₂'⇓x₂'
+  , vs₂ ⧺ vs₁
+  , ts⇓-join ts₁⇓vs₁ ts₂⇓vs₂
+  , refl
+  )
+fundamental ρₛ~ρ (≤-CC e≤e')
+  with Const x , Const .x , ts ,ᵥ e⇓a , e'⇓x , vs , ts⇓vs , refl ←
+    fundamental ρₛ~ρ e≤e' =
+  ( Code N (Cₐ x)
+  , Const x
+  , ts
+  ,ᵥ evalms-CC e⇓a
+  , e'⇓x
+  , vs
+  , ts⇓vs
+  , Constₐ x
+  , Anf.eval-c x
+  , refl)
+fundamental {offs = offs} {e = λλ τ e} {envₛ} {env = env} {envₜ}
   ρₛ~ρ (≤-λλ {τ = τ} {τ' = τ'} e≤e')
   with f , f' , ts ,ᵥ e⇓f , e'⇓f' , vs , ts⇓vs , f~f' ←
-    valueCorrectness ρₛ~ρ e≤e'
+    fundamental ρₛ~ρ e≤e'
   with fSN , (_,ᵥ_ {len = len} tsSN (e⇓SN[ts,f] , SN[f])) ←
     strongNormalization (ρ~⇒⊨ ρₛ~ρ) offs e
   with ts≅tsSN , refl ← evalms-unique e⇓f e⇓SN[ts,f]
@@ -253,5 +291,77 @@ valueCorrectness {offs = offs} {e = λλ τ e} {envₛ} {env = env} {envₜ}
       with refl ← ≅-len cbody≅ts'
       with refl ← ≅⇒≡ cbody≅ts' =
       v' , v'' ,  vs' , eᵢ⇓v' , ts'⇓vs' , p⇓v'' , v'≈v''
-valueCorrectness ρₛ~ρ (≤-++ e≤e' e≤e'') = {! !}
-valueCorrectness ρₛ~ρ (≤-$$ e≤e' e≤e'') = {! !}
+fundamental {offs = offs} {envₜ = envₜ} ρₛ~ρ (≤-++ e₁≤e₁' e₂≤e₂')
+  with Code .N a₁ , Const x₁ ,
+      (_,ᵥ_ {len = m₁} ts₁ (e₁⇓a₁ , e₁'⇓x₁ , vs₁ , ts₁⇓vs₁ , a₁~x₁)) ←
+    fundamental ρₛ~ρ e₁≤e₁'
+  with Code .N a₂ , Const x₂ ,
+      (_,ᵥ_ {len = m₂} ts₂ (e₂⇓a₂ , e₂'⇓x₂ , vs₂ , ts₂⇓vs₂ , a₂~x₂)) ←
+    fundamental (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂'
+  with Constₐ .x₁ , vs₁⧺envₜ⊢a₁⇓x₁ , refl ← a₁~x₁
+  with Constₐ .x₂ , vs₂⧺vs₁⧺envₜ⊢a₂⇓x₂ , refl ← a₂~x₂
+  using [vs₂⧺vs₁]⧺envₜ≅vs₂⧺vs₁⧺envₜ ← ≅-symmetric (≅-++-assoc vs₂ vs₁ envₜ) =
+  ( Code N (Vₐ (m₂ + m₁ + offs))
+  , Const (x₁ + x₂)
+  , a₁ +ₐ a₂ ∷ ts₂ ⧺ ts₁
+  ,ᵥ evalms-++ refl (+-assoc m₂ m₁ offs) e₁⇓a₁ e₂⇓a₂
+  , eval-+ refl e₁'⇓x₁ e₂'⇓x₂
+  , Constₐ (x₁ + x₂) ∷ vs₂ ⧺ vs₁
+  , Anf.eval-cons refl
+      (ts⇓-join ts₁⇓vs₁ ts₂⇓vs₂)
+      (Anf.eval-+ refl
+        (≅-subst (_⊢v a₁ ⇓ Constₐ x₁) [vs₂⧺vs₁]⧺envₜ≅vs₂⧺vs₁⧺envₜ
+          (extend-v⇓ (++-⊆ (vs₁ ⧺ envₜ) vs₂) vs₁⧺envₜ⊢a₁⇓x₁))
+        (≅-subst (_⊢v a₂ ⇓ Constₐ x₂) [vs₂⧺vs₁]⧺envₜ≅vs₂⧺vs₁⧺envₜ
+          vs₂⧺vs₁⧺envₜ⊢a₂⇓x₂))
+  , Constₐ (x₁ + x₂)
+  , eval-v here
+  , refl)
+fundamental {offs = offs} {envₜ = envₜ}
+    ρₛ~ρ (≤-$$ {τ₁ = τ₁} {τ₂} {τ₁'} {τ₂'} e₁≤e₁' e₂≤e₂')
+  with Code .(τ₁ => τ₂) a₁ , Closure ρᵢ eᵢ ,
+      (_,ᵥ_ {len = m₁} ts₁ (e₁⇓a₁ , e₁'⇓ , vs₁ , ts₁⇓vs₁ , f~f')) ←
+    fundamental ρₛ~ρ e₁≤e₁'
+  with Closureₐ vsᵢ tsᵢ a , vs₁⧺envₜ⊢p₁⇓v₁ , IH ← f~f'
+  with Code .τ₁ a₂ , x' ,
+      (_,ᵥ_ {len = m₂} ts₂ (e₂⇓a₂ , e₂'⇓x' , vs₂ , ts₂⇓vs₂ , x~x')) ←
+    fundamental (extend-ρ~ (++-⊆ _ vs₁) ρₛ~ρ) e₂≤e₂'
+  with x , vs₂⧺vs₁⧺envₜ⊢a₂⇓x , x'≈x ← x~x'
+  with v , v' , vs' , x'∷ρᵢ⊢eᵢ⇓v , x∷vsᵢ⊢tsᵢ⇓vs' , vs'⧺x∷vsᵢ⊢a⇓v' , v≈v' ←
+    IH x'≈x
+  using [vs₂⧺vs₁]⧺envₜ≅vs₂⧺vs₁⧺envₜ ← ≅-symmetric (≅-++-assoc vs₂ vs₁ envₜ) =
+  ( Code τ₂ (Vₐ (m₂ + m₁ + offs))
+  , v
+  , a₁ $ₐ a₂ ∷ ts₂ ⧺ ts₁
+  ,ᵥ evalms-$$ refl (+-assoc m₂ m₁ offs) e₁⇓a₁ e₂⇓a₂
+  , eval-$ e₁'⇓ e₂'⇓x' x'∷ρᵢ⊢eᵢ⇓v
+  , v' ∷ vs₂ ⧺ vs₁
+  , Anf.eval-cons refl
+      (ts⇓-join ts₁⇓vs₁ ts₂⇓vs₂)
+      (Anf.eval-$ refl
+        (≅-subst (_⊢v a₁ ⇓ Closureₐ vsᵢ tsᵢ a) [vs₂⧺vs₁]⧺envₜ≅vs₂⧺vs₁⧺envₜ
+          (extend-v⇓ (++-⊆ (vs₁ ⧺ envₜ) vs₂) vs₁⧺envₜ⊢p₁⇓v₁))
+        (≅-subst (_⊢v a₂ ⇓ x) [vs₂⧺vs₁]⧺envₜ≅vs₂⧺vs₁⧺envₜ
+          vs₂⧺vs₁⧺envₜ⊢a₂⇓x)
+        x∷vsᵢ⊢tsᵢ⇓vs'
+        vs'⧺x∷vsᵢ⊢a⇓v')
+  , v'
+  , eval-v here
+  , v≈v')
+
+valueCorrectness : ∀ {τ} {ts : Vec Anf.Expr n} {v v' a} →
+  (e : Tm Staged (Rep τ) []) →
+  nil , 0 ⊢ e ⇓[ ts , Code τ a ] →
+  [] ⊢p [ ts , a ] ⇓ v' →
+  nil ⊢ forget e ⇓ v →
+  v ≈ v'
+valueCorrectness e e⇓[ts,a] (vs , ts⇓vs , vs⇓vₛ) f[e]⇓v
+  with Code τ a , v , ts ,ᵥ
+      e⇓[ts,a]' , f[e]⇓v' , vs' , ts⇓vs' , vₛ' , vs⇓vₛ' , v≈vₛ ←
+    fundamental {envₜ = []} ~-nil (forget-≤ e)
+  with refl ← eval-unique f[e]⇓v f[e]⇓v'
+  with ts≅ts' , refl ← evalms-unique e⇓[ts,a] e⇓[ts,a]'
+  with refl ← ≅-len ts≅ts'
+  with refl ← ≅⇒≡ ts≅ts'
+  with refl ← ts⇓-unique ts⇓vs ts⇓vs'
+  with refl ← v⇓-unique  vs⇓vₛ vs⇓vₛ' = v≈vₛ
