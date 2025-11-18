@@ -106,6 +106,9 @@ data _,_⊢_⇓[_,_] : ∀{τ} {Γ : Ctx Staged n} →
       {ts : Vec Anf.Expr m} {tsᵢ : Vec Anf.Expr m'} →
     offs' ≡ m + offs →
     env , offs ⊢ e ⇓[ ts , Closure env' e' ] →
+    -- This is an inlining of `env , offs' ⊢ e $ (Vₐ offs') ⇓...`, which
+    -- can't be expressed directly due to being unable to express `Vₐ offs'`
+    -- in surface code.
     (cons (Code τ (Vₐ offs')) env') , suc offs' ⊢ e' ⇓[ tsᵢ , Code τ' v ] →
     env , offs ⊢ λλ τ e ⇓[ (λₐ τ tsᵢ v) ∷ ts , Code (τ => τ') (Vₐ offs') ]
 
