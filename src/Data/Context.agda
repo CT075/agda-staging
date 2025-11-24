@@ -4,13 +4,16 @@ open import Data.Nat as Nat
 open import Data.Nat.Properties
 open import Level renaming (suc to lsuc; zero to lzero)
 import Data.Vec as Vec
+open import Data.Product as Prod
+open import Data.Maybe as Maybe
 open import Data.Empty as Void
 open import Relation.Binary.PropositionalEquality using (refl; _≡_)
+open import Relation.Nullary.Decidable.Core using (yes; no)
 
 open import Data.Vec.Extensions
 
 open Vec using ([]; _∷_) public
-open Vec hiding (_[_]=_)
+open Vec hiding (_[_]=_; lookup)
 
 private variable
   ℓ : Level
@@ -29,6 +32,12 @@ Ctx = Vec
 data _[_]=_ {T : Set ℓ} : Ctx T n → ℕ → T → Set ℓ where
   here : ∀{Γ : Ctx T n} → (t ∷ Γ)[ n ]= t
   there : ∀{Γ : Ctx T n} → Γ [ i ]= t → (t' ∷ Γ)[ i ]= t
+
+lookup : (Γ : Ctx T n) → (i : ℕ) → Maybe (∃[ t ](Γ [ i ]= t))
+lookup [] i = nothing
+lookup {n = suc n} (t ∷ Γ) i with i ≟ n
+... | yes refl = just (_ , here)
+... | no _ = Maybe.map (λ (x , y) → (x , there y)) (lookup Γ i)
 
 []=→< : ∀{Γ : Ctx T n} {t : T} → Γ [ i ]= t → i < n
 []=→< here = n<1+n _
