@@ -45,8 +45,6 @@ _⊨v_~_ : ∀{τ τ'} →
   Anf.Env offs → Val Staged τ → Val Base τ' → Set
 _⊨e⟨_,_⟩~⟨_,_⟩ : ∀{Γ : Ctx Staged n} {τ} {Γ' : Ctx Base n'} {τ'} →
   Anf.Env offs → Env Γ → Tm _ τ Γ → Env Γ' → Tm _ τ' Γ' → Set
-data _⊨ρ_~_ : ∀{Γ : Ctx Staged n} {Γ' : Ctx Base n} →
-  Anf.Env offs → Env Γ → Env Γ' → Set
 
 envₜ ⊨v Const x ~ Const x' = x ≡ x'
 envₜ ⊨v Const _ ~ Closure _ _ = ⊥
@@ -64,7 +62,8 @@ _⊨e⟨_,_⟩~⟨_,_⟩ {offs = offs} envₜ envₛ e envₛ' e' =
     envₛ' ⊢ e' ⇓ v' ×
     Σ[ vs ∈ Anf.Env _ ](envₜ ⊢ts ts ⇓ vs × (vs ⧺ envₜ) ⊨v v ~ v'))))
 
-data _⊨ρ_~_ where
+data _⊨ρ_~_ : ∀{Γ : Ctx Staged n} {Γ' : Ctx Base n} →
+    Anf.Env offs → Env Γ → Env Γ' → Set where
   ~-nil : ∀{envₜ : Anf.Env offs} → envₜ ⊨ρ nil ~ nil
   ~-cons :
     ∀ {Γ : Ctx Staged n} {Γ' : Ctx Base n}
