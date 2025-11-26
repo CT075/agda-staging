@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Data.Context where
 
 open import Data.Nat as Nat

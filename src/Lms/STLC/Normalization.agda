@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Lms.STLC.Normalization where
 
 open import Data.Nat as Nat

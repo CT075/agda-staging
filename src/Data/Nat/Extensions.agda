@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Data.Nat.Extensions where
 
 open import Data.Nat

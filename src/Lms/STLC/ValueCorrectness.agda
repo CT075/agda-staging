@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Lms.STLC.ValueCorrectness where
 
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
@@ -49,9 +51,9 @@ _⊨e⟨_,_⟩~⟨_,_⟩ : ∀{Γ : Ctx Staged n} {τ} {Γ' : Ctx Base n'} {τ'}
 envₜ ⊨v Const x ~ Const x' = x ≡ x'
 envₜ ⊨v Const _ ~ Closure _ _ = ⊥
 envₜ ⊨v Closure _ _ ~ Const _ = ⊥
--- XXX: Do we need envₛ and envₛ' to be related?
-envₜ ⊨v eₛ@(Closure {τ₁ = τ} envₛ e) ~ Closure {τ₁ = τ'} envₛ' e' =
-  SNᵥ eₛ ×
+-- XXX: We should pull out this SNᵥ f to the exp relation.
+envₜ ⊨v f@(Closure {τ₁ = τ} envₛ e) ~ Closure {τ₁ = τ'} envₛ' e' =
+  SNᵥ f ×
   ∀ {offs} {env : Anf.Env offs} {x : Val _ τ} {x' : Val _ τ'} →
   envₜ ⊆ env → env ⊨v x ~ x' → env ⊨e⟨ cons x envₛ , e ⟩~⟨ cons x' envₛ' , e' ⟩
 envₜ ⊨v Code τ p ~ v' = ∃[ v ] (envₜ ⊢v p ⇓ v × v' ≈ v)

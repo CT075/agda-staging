@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Data.Vec.Extensions where
 
 open import Level using (Level; _⊔_)

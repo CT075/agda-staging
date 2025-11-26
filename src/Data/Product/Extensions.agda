@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Data.Product.Extensions where
 
 open import Level

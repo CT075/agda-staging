@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Lms.STLC.WellFormed where
 
 -- Metatheory and miscellaneous properties of λLMS, establishing that generated

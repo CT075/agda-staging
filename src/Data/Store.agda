@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Data.Store where
 
 open import Data.Nat

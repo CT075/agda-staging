@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Lms.Arith where
 
 open import Data.Unit using (⊤)

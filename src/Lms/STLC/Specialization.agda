@@ -1,3 +1,5 @@
+{-# OPTIONS --safe #-}
+
 module Lms.STLC.Specialization where
 
 open import Data.Nat as Nat using (ℕ; suc; zero; _+_)
